@@ -12,8 +12,9 @@ import base64
 import os
 from typing import NamedTuple
 import requests
+import httpx
 from pydantic import BaseModel
-
+import asyncio
 class DbStruct(NamedTuple):
     email: str
     qr: str
@@ -26,7 +27,7 @@ class UserRequest(BaseModel):
     email: str
     request: str
 
-
+DB_API_URL = "http://localhost:8000/"
 QR_API_URL = "http://localhost:8001/"
 
 class App:
@@ -45,6 +46,9 @@ class App:
 
     def get_app(self):
         self.app.include_router(self.router)
+        @self.app.on_event("startup")
+        async def startup_event():
+            asyncio.create_task(self.periodic_notify())
         return self.app
 
     def __setup_email(self):
@@ -53,6 +57,11 @@ class App:
         self.app_password = os.getenv("APP_PASSWORD")
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 465
+
+    async def periodic_notify(self):
+        while True:
+            await asyncio.sleep(10) # 10秒ごとに実行
+            await self.notify_user()
 
     async def read_root(self):
         return {"detail": "A Control Server"}
@@ -89,9 +98,16 @@ class App:
             "uuid": uuid,
             "request": request
         }
-        r_post = requests.post(QR_API_URL+"gen-qr", json=item)
+        # URLを適切に構築
+        url = f"{QR_API_URL.rstrip('/')}/gen-qr"
+        print(f"Requesting QR URL: {url}")
+        
+        async with httpx.AsyncClient(follow_redirects=True) as client:
+            r_post = await client.post(url, json=item)
+        
+        print(f"QR Response status: {r_post.status_code}")
         if r_post.status_code != 201:
-            print(f"gen-qrとの接続に失敗しました: {r_post.text}")
+            print(f"gen-qrとの接続に失敗しました: {r_post.status_code}, {r_post.text}")
             return {"uuid": uuid, "qr_code": None}
         return {"uuid": r_post.json().get("uuid"), "qr_code": r_post.json().get("qr_code")}
 
@@ -126,3 +142,42 @@ class App:
         except Exception as e:
             print(f"error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+    
+    async def notify_user(self):
+        for uuid in list(self.__db.keys()): 
+            if await self.check_user_ready(uuid):
+                print(f"User {uuid} is ready. Sending QR code...")
+                await self.send_qr(uuid)
+                self.__db.pop(uuid)
+            else:
+                print(f"User {uuid} is not ready yet.")
+
+    async def check_user_ready(self, uuid: str) -> bool:
+        try:
+            params = {
+                "user_id": uuid
+            }
+            headers = {
+                "accept": "application/json"
+            }
+            # URLを適切に構築（スラッシュの重複を避ける）
+            url = f"{DB_API_URL.rstrip('/')}/{uuid}/status"
+            print(f"Requesting URL: {url}")
+            
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                response = await client.get(url, params=params, headers=headers)
+            
+            print(f"Response status: {response.status_code}")
+            if response.status_code == 200:
+                data = response.json()
+                print(f"Response data: {data}, Tyepe: {type(data['status'])}")
+                if data["status"] == True:
+                    return True
+                else:
+                    return False
+            else:
+                print(f"Failed to fetch user status: {response.status_code}, {response.text}")
+                return False
+        except Exception as e:
+            print(f"Error checking user status: {e}")
+            return False
