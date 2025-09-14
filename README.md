@@ -1,6 +1,14 @@
 # ControlServer
 
 ## 実行方法
+.envファイルに送信用Gmailの情報を設定
+```
+FROM_EMAIL="送信元email"
+APP_PASSWORD="app pass"
+```
+アプリパスワードについては下記を参照
+
+https://support.google.com/mail/answer/185833?hl=ja
 ```
 uv sync
 
