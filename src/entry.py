@@ -14,7 +14,7 @@ parser.add_argument(
     "-p",
     "--port",
     type=int,
-    default=8002,
+    default=8000,
     help="Port to run the FastAPI application on",
 )
 args = parser.parse_args()
@@ -22,4 +22,3 @@ args = parser.parse_args()
 app = App(args.qr_server).get_app()
 if __name__ == "__main__":
     uvicorn.run("entry:app", host="0.0.0.0", port=args.port)
-
