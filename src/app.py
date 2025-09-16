@@ -29,27 +29,25 @@ class UserRequest(BaseModel):
     request: str
 
 
-QR_API_URL = "http://localhost:8001/"
-
-
 class App:
-    def __init__(self):
-        self.app = FastAPI()
-        self.router = APIRouter()
+    def __init__(self, qr_endpoint: str):
+        self.__app = FastAPI()
+        self.__router = APIRouter()
         self.__setup_routes()
         self.__setup_email()
         # とりあえず仮で辞書型を。処理途中でサーバ落ちたら終わる
         self.__db = {}
+        self.__qr_endpoint = qr_endpoint
 
     def __setup_routes(self):
-        self.router.add_api_route("/", self.read_root)
-        self.router.add_api_route(
+        self.__router.add_api_route("/", self.read_root)
+        self.__router.add_api_route(
             "/set-user-status",
             self.set_user_status,
             methods=["POST"],
             status_code=status.HTTP_200_OK,
         )
-        self.router.add_api_route(
+        self.__router.add_api_route(
             "/register-request",
             self.register_request,
             methods=["POST"],
@@ -57,8 +55,8 @@ class App:
         )
 
     def get_app(self):
-        self.app.include_router(self.router)
-        return self.app
+        self.__app.include_router(self.__router)
+        return self.__app
 
     def __setup_email(self):
         load_dotenv()
@@ -106,7 +104,7 @@ class App:
 
     async def request_gen_qr(self, uuid: str, request: str):
         item = {"uuid": uuid, "request": request}
-        r_post = requests.post(QR_API_URL + "gen-qr", json=item)
+        r_post = requests.post(f"{self.__qr_endpoint}/gen-qr", json=item)
         if r_post.status_code != 201:
             print(f"gen-qrとの接続に失敗しました: {r_post.text}")
             return {"uuid": uuid, "qr_code": None}
@@ -153,4 +151,3 @@ class App:
         except Exception as e:
             print(f"error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-
