@@ -11,9 +11,11 @@ import base64
 import os
 from typing import NamedTuple
 import requests
+import httpx
 from pydantic import BaseModel
 
 
+import asyncio
 class DbStruct(NamedTuple):
     email: str
     qr: str
@@ -65,6 +67,11 @@ class App:
         self.smtp_server = "smtp.gmail.com"
         self.smtp_port = 465
 
+    async def periodic_notify(self):
+        while True:
+            await asyncio.sleep(10) # 10秒ごとに実行
+            await self.notify_user()
+
     async def read_root(self):
         return {"detail": "A Control Server"}
 
@@ -106,7 +113,7 @@ class App:
         item = {"uuid": uuid, "request": request}
         r_post = requests.post(f"{self.__qr_endpoint}/gen-qr", json=item)
         if r_post.status_code != 201:
-            print(f"gen-qrとの接続に失敗しました: {r_post.text}")
+            print(f"gen-qrとの接続に失敗しました: {r_post.status_code}, {r_post.text}")
             return {"uuid": uuid, "qr_code": None}
         return {
             "uuid": r_post.json().get("uuid"),
