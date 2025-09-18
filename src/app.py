@@ -99,7 +99,7 @@ class App:
                 content={"detail": "Failed to generate QR code"}, status_code=500
             )
         return JSONResponse(
-            content={"detail": "User registered successfully"}, status_code=200
+            content={"detail": f"UUID:{generated_uuid}"}, status_code=200
         )
 
     async def request_gen_qr(self, uuid: str, request: str):
