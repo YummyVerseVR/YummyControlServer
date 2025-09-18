@@ -11,9 +11,7 @@ import base64
 import os
 from typing import NamedTuple
 import requests
-import httpx
 from pydantic import BaseModel
-import asyncio
 
 
 class DbStruct(NamedTuple):

@@ -11,3 +11,6 @@ wheels/
 
 .env
 .direnv
+
+credentials.json
+token.json
