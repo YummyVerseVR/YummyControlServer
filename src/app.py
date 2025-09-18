@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+from email.mime.image import MIMEImage
 from email.utils import formataddr, formatdate
 import base64
 import os
@@ -13,6 +14,13 @@ from typing import NamedTuple
 import requests
 from pydantic import BaseModel
 
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+
+SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
+TEST_QR_CODE = "iVBORw0KGgoAAAANSUhEUgAAADYAAAA2AQMAAAC2i/ieAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAeUlEQVQYlZXNMQoEMQiF4Qe2Aa8i2Aa8+oJtYK4SsB1wltlAnO3mb77KJ/AyyjDLIqQLFU2HxkP/sz2E5Lr/maFr//Ybr9e3dGp6FJlz8hZdO3JL07vxFqHaZhE05NhSzqNJESKsRZNIr2qz86F3FKEYUsz4eNu+7AJ7EFg5FDUcHwAAAABJRU5ErkJggg=="
 
 class DbStruct(NamedTuple):
     email: str
@@ -30,7 +38,7 @@ class UserRequest(BaseModel):
 
 
 class App:
-    def __init__(self, qr_endpoint: str):
+    def __init__(self, qr_endpoint: str, debug: bool = False):
         self.__app = FastAPI()
         self.__router = APIRouter()
         self.__setup_routes()
@@ -38,6 +46,7 @@ class App:
         # とりあえず仮で辞書型を。処理途中でサーバ落ちたら終わる
         self.__db = {}
         self.__qr_endpoint = qr_endpoint
+        self.__debug = debug
 
     def __setup_routes(self):
         self.__router.add_api_route(
@@ -70,11 +79,7 @@ class App:
         return self.__app
 
     def __setup_email(self):
-        load_dotenv()
-        self.from_email = os.getenv("FROM_EMAIL")
-        self.app_password = os.getenv("APP_PASSWORD")
-        self.smtp_server = "smtp.gmail.com"
-        self.smtp_port = 465
+        self.service = self.get_service()
 
     # async def periodic_notify(self):
     #     while True:
@@ -84,6 +89,22 @@ class App:
     async def read_root(self):
         return {"detail": "A Control Server"}
 
+    def get_service(self):
+        """Gmail APIサービスを取得"""
+        creds = None
+        if os.path.exists("token.json"):
+            creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+                creds = flow.run_local_server(port=0)
+            with open("token.json", "w") as token:
+                token.write(creds.to_json())
+        return build("gmail", "v1", credentials=creds)
+
+    
     # /set-user-status
     async def set_user_status(self, item: UserState) -> JSONResponse:
         if item.uuid not in self.__db:
@@ -123,6 +144,9 @@ class App:
 
     async def request_gen_qr(self, uuid: str, request: str):
         item = {"uuid": uuid, "request": request}
+        if self.__debug:
+            print(f"DEBUG MODE: {item}")
+            return {"uuid": uuid, "qr_code": TEST_QR_CODE}
         r_post = requests.post(f"{self.__qr_endpoint}/gen-qr", json=item)
         if r_post.status_code != 201:
             print(f"Failed to generate QR code: {r_post.text}")
@@ -133,40 +157,30 @@ class App:
         }
 
     async def send_qr(self, uuid: str):
-        print(f"from: {self.from_email}")
         print(f"to: {self.__db[uuid]['email']}")
         print(f"QR Code (base64): {self.__db[uuid]['qr_code'][:30]}...")
-        if not self.from_email or not self.app_password:
-            raise HTTPException(
-                status_code=500, detail="Email configuration is not set"
-            )
-        if uuid not in self.__db:
-            raise HTTPException(status_code=404, detail="UUID not found")
 
+        message = MIMEMultipart()
+        message["to"] = self.__db[uuid]["email"]
+        message["from"] = "me"
+        message["subject"] = "YummyVerseのQRコード"
+
+        body_text = "YummyVerseのQRコードをお送りします。アプリで読み取ってください。"
+        message.attach(MIMEText(body_text, "plain", "utf-8"))
+
+        qr_data = base64.b64decode(self.__db[uuid]['qr_code'])
+        image = MIMEImage(qr_data, name="qr_code.png")
+        image.add_header('Content-Disposition', 'attachment', filename='qr_code.png')
+        message.attach(image)
+
+        encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        body = {"raw": encoded_message}
+            
         try:
-            msg = MIMEMultipart()
-            msg["From"] = formataddr(("YummyVerse[開発用]", self.from_email))
-            msg["Subject"] = "YummyVerseのQRコード"
-            msg["Date"] = formatdate(localtime=True)
-            msg["To"] = self.__db[uuid]["email"]
-
-            body = MIMEText(
-                "YummyVerseのQRコードをお送りします。アプリで読み取ってください。",
-                "plain",
-            )
-            msg.attach(body)
-
-            attachment = MIMEApplication(base64.b64decode(self.__db[uuid]["qr_code"]))
-            file_name = f"YummyVerse_QR_{uuid}.png"
-            attachment.add_header(
-                "Content-Disposition", "attachment", filename=file_name
-            )
-            msg.attach(attachment)
-
-            with smtplib.SMTP_SSL(self.smtp_server, self.smtp_port) as server:
-                server.login(self.from_email, self.app_password)
-                server.send_message(msg)
-            return {"detail": "QR code sent successfully"}
+            sent = self.service.users().messages().send(
+            userId="me",
+            body=body).execute()
+            print(f"ID: {sent['id']}")
         except Exception as e:
             print(f"error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
