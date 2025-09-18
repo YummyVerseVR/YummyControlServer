@@ -1,13 +1,9 @@
-import smtplib
 import uuid
-from fastapi import FastAPI, APIRouter, HTTPException, status
+from fastapi import FastAPI, APIRouter, HTTPException, status, Form
 from fastapi.responses import JSONResponse
-from dotenv import load_dotenv
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
-from email.utils import formataddr, formatdate
 import base64
 import os
 from typing import NamedTuple
@@ -21,6 +17,7 @@ from googleapiclient.discovery import build
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 TEST_QR_CODE = "iVBORw0KGgoAAAANSUhEUgAAADYAAAA2AQMAAAC2i/ieAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAeUlEQVQYlZXNMQoEMQiF4Qe2Aa8i2Aa8+oJtYK4SsB1wltlAnO3mb77KJ/AyyjDLIqQLFU2HxkP/sz2E5Lr/maFr//Ybr9e3dGp6FJlz8hZdO3JL07vxFqHaZhE05NhSzqNJESKsRZNIr2qz86F3FKEYUsz4eNu+7AJ7EFg5FDUcHwAAAABJRU5ErkJggg=="
+
 
 class DbStruct(NamedTuple):
     email: str
@@ -98,27 +95,30 @@ class App:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    "credentials.json", SCOPES
+                )
                 creds = flow.run_local_server(port=0)
             with open("token.json", "w") as token:
                 token.write(creds.to_json())
         return build("gmail", "v1", credentials=creds)
 
-    
     # /set-user-status
-    async def set_user_status(self, item: UserState) -> JSONResponse:
-        if item.uuid not in self.__db:
+    async def set_user_status(
+        self, uuid: str = Form(...), is_ready: bool = Form(...)
+    ) -> JSONResponse:
+        if uuid not in self.__db:
             print(f"now database: {self.__db}")
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
 
-        if not item.is_ready:
-            self.__db.pop(item.uuid)
+        if not is_ready:
+            self.__db.pop(uuid)
             return JSONResponse(
                 content={"detail": "some thing wrong. please try again"},
                 status_code=400,
             )
 
-        await self.send_qr(item.uuid)
+        await self.send_qr(uuid)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     # /register-request
@@ -168,18 +168,18 @@ class App:
         body_text = "YummyVerseのQRコードをお送りします。アプリで読み取ってください。"
         message.attach(MIMEText(body_text, "plain", "utf-8"))
 
-        qr_data = base64.b64decode(self.__db[uuid]['qr_code'])
+        qr_data = base64.b64decode(self.__db[uuid]["qr_code"])
         image = MIMEImage(qr_data, name="qr_code.png")
-        image.add_header('Content-Disposition', 'attachment', filename='qr_code.png')
+        image.add_header("Content-Disposition", "attachment", filename="qr_code.png")
         message.attach(image)
 
         encoded_message = base64.urlsafe_b64encode(message.as_bytes()).decode()
         body = {"raw": encoded_message}
-            
+
         try:
-            sent = self.service.users().messages().send(
-            userId="me",
-            body=body).execute()
+            sent = (
+                self.service.users().messages().send(userId="me", body=body).execute()
+            )
             print(f"ID: {sent['id']}")
         except Exception as e:
             print(f"error: {e}")
