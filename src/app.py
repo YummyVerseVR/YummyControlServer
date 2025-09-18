@@ -53,6 +53,12 @@ class App:
             methods=["POST"],
             status_code=status.HTTP_200_OK,
         )
+        self.__router.add_api_route(
+            "/list",
+            self.list_db,
+            methods=["GET"],
+            status_code=status.HTTP_200_OK,
+        )
 
     def get_app(self):
         self.__app.include_router(self.__router)
@@ -68,7 +74,7 @@ class App:
     async def read_root(self):
         return {"detail": "A Control Server"}
 
-    # Database ServerからNotify Readyを受け取る
+    # /set-user-status
     async def set_user_status(self, item: UserState) -> JSONResponse:
         if item.uuid not in self.__db:
             print(f"now database: {self.__db}")
@@ -84,13 +90,16 @@ class App:
         await self.send_qr(item.uuid)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
-    # GAS ServerからSend requestを受け取る
+    # /register-request
     async def register_request(self, item: UserRequest) -> JSONResponse:
-        # uuidを鍵としてemail, qrを保存
         generated_uuid = str(uuid.uuid4())
 
         r = await self.request_gen_qr(generated_uuid, item.request)
-        self.__db[r["uuid"]] = {"email": item.email, "qr_code": r["qr_code"]}
+        self.__db[r["uuid"]] = {
+            "email": item.email,
+            "qr_code": r["qr_code"],
+            "request": item.request,
+        }
         print(f"email : {item.email}")
         print(f"uuid : {generated_uuid}")
         print(f"request : {item.request}")
@@ -106,7 +115,7 @@ class App:
         item = {"uuid": uuid, "request": request}
         r_post = requests.post(f"{self.__qr_endpoint}/gen-qr", json=item)
         if r_post.status_code != 201:
-            print(f"gen-qrとの接続に失敗しました: {r_post.text}")
+            print(f"Failed to generate QR code: {r_post.text}")
             return {"uuid": uuid, "qr_code": None}
         return {
             "uuid": r_post.json().get("uuid"),
@@ -151,3 +160,13 @@ class App:
         except Exception as e:
             print(f"error: {e}")
             raise HTTPException(status_code=500, detail=str(e))
+
+    # /list
+    def list_db(self) -> JSONResponse:
+        return JSONResponse(
+            content={
+                "list": [
+                    {"uuid": k, "request": v["request"]} for k, v in self.__db.items()
+                ]
+            }
+        )
