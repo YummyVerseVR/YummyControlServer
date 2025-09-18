@@ -58,6 +58,12 @@ class App:
             methods=["GET"],
             status_code=status.HTTP_200_OK,
         )
+        self.__router.add_api_route(
+            "/ping",
+            self.ping,
+            methods=["GET"],
+            status_code=status.HTTP_200_OK,
+        )
 
     def get_app(self):
         self.__app.include_router(self.__router)
@@ -174,3 +180,7 @@ class App:
                 ]
             }
         )
+
+    # /ping
+    async def ping(self) -> JSONResponse:
+        return JSONResponse(content={"message": "pong"}, status_code=200)
