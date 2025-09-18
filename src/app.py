@@ -104,21 +104,19 @@ class App:
         return build("gmail", "v1", credentials=creds)
 
     # /set-user-status
-    async def set_user_status(
-        self, uuid: str = Form(...), is_ready: bool = Form(...)
-    ) -> JSONResponse:
-        if uuid not in self.__db:
+    async def set_user_status(self, item: UserState) -> JSONResponse:
+        if item.uuid not in self.__db:
             print(f"now database: {self.__db}")
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
 
-        if not is_ready:
-            self.__db.pop(uuid)
+        if not item.is_ready:
+            self.__db.pop(item.uuid)
             return JSONResponse(
                 content={"detail": "some thing wrong. please try again"},
                 status_code=400,
             )
 
-        await self.send_qr(uuid)
+        await self.send_qr(item.uuid)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     # /register-request
