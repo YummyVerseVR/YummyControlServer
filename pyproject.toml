@@ -10,8 +10,10 @@ dependencies = [
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.2.2",
     "httpx>=0.28.1",
+    "ollama>=0.5.4",
     "pydantic[email]>=2.11.7",
     "python-dotenv>=1.1.1",
+    "qrcode>=8.2",
     "requests>=2.32.5",
     "uvicorn>=0.35.0",
 ]
