@@ -1,0 +1,28 @@
+{
+    "root": "setting",
+    "host": "0.0.0.0",
+    "port": 8000,
+    "db": {
+        "path": "~/HDD"
+    },
+    "endpoints": {
+        "audio": "http://192.168.11.100:8002",
+        "model": "http://192.168.11.100:8003",
+        "llm": "http://192.168.11.101:8004",
+        "ollama": "http://192.168.11.144:11434",
+    }
+    "ollama": {
+        "model": "gemma3:12b",
+        "prompt": "./settings/prompt.txt",
+        "temperature": 0.0,
+        "num_predict": 500
+    },
+    "email": {
+        "scopes": [
+            "https://www.googleapis.com/auth/gmail.send"
+        ],
+        "from": "yummyversevr@gmail.com",
+        "credential": "./settings/credential.json",
+        "token": "./settings/token.json"
+    }
+}
