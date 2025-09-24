@@ -18,7 +18,7 @@ from qr.handler import QRHandler, RequestItem
 
 class UserRequest(BaseModel):
     email: str
-    body: str
+    request: str
 
 
 class App:
@@ -168,7 +168,7 @@ class App:
     async def request(self, request: UserRequest) -> JSONResponse:
         generated_uuid = str(uuid.uuid4())
         qr_data, qr_image = self.__qr_handler.generate_qr(
-            RequestItem(uuid=generated_uuid, request=request.body)
+            RequestItem(uuid=generated_uuid, request=request.request)
         )
 
         self.__db.add_user(generated_uuid)
@@ -182,18 +182,18 @@ class App:
 
         user.meta.email = request.email
         user.meta.qr_code = qr_data
-        user.meta.request = request.body
+        user.meta.request = request.request
         user.save_meta()
 
         print("[INFO] New request registered")
         print(f"  email : {request.email}")
         print(f"  uuid : {generated_uuid}")
-        print(f"  request : {request.body}")
+        print(f"  request : {request.request}")
 
-        llm_response = await self.__call_llm(request.body)
+        llm_response = await self.__call_llm(request.request)
         self.__db.load_param(generated_uuid, llm_response.model_dump())
-        asyncio.create_task(self.__generate_model(generated_uuid, request.body))
-        asyncio.create_task(self.__generate_audio(generated_uuid, request.body))
+        asyncio.create_task(self.__generate_model(generated_uuid, request.request))
+        asyncio.create_task(self.__generate_audio(generated_uuid, request.request))
 
         return JSONResponse(
             content={"detail": f"UUID:{generated_uuid}"}, status_code=200
