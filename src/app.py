@@ -28,6 +28,14 @@ class App:
         self.__qr_handler = QRHandler(config, debug_mode)
         self.__email_sender = EmailSender(config.get("email", {}), debug_mode)
 
+        self.__endpoints = config.get("endpoints", {})
+        self.__audio_endpoint = self.__endpoints.get(
+            "audio", "http://192.168.11.100:8001"
+        )
+        self.__model_endpoint = self.__endpoints.get(
+            "model", "http://192.168.11.100:8002"
+        )
+
         self.__app = FastAPI()
         self.__router = APIRouter()
         self.__setup_routes()
@@ -114,9 +122,43 @@ class App:
         llm_response = await self.__llm.choose_dish(request)
         return llm_response
 
-    async def __generate_model(self, user_id: str, request: str) -> bool: ...
+    async def __generate_model(self, user_id: str, request: str) -> None:
+        data = {
+            "user_id": user_id,
+            "prompt": request,
+        }
 
-    async def __generate_audio(self, user_id: str, request: str) -> bool: ...
+        try:
+            response = requests.post(
+                f"{self.__model_endpoint}/generate", json=data, timeout=300
+            )
+            if response.status_code == 200:
+                print(f"[INFO] Model generation request succeeded for {user_id}")
+            else:
+                print(
+                    f"[ERROR] Model generation request failed for {user_id} with status code {response.status_code}"
+                )
+        except requests.RequestException as e:
+            print(f"[ERROR] Model generation request exception for {user_id}: {e}")
+
+    async def __generate_audio(self, user_id: str, request: str) -> None:
+        data = {
+            "user_id": user_id,
+            "prompt": request,
+        }
+
+        try:
+            response = requests.post(
+                f"{self.__audio_endpoint}/generate", json=data, timeout=300
+            )
+            if response.status_code == 200:
+                print(f"[INFO] Audio generation request succeeded for {user_id}")
+            else:
+                print(
+                    f"[ERROR] Audio generation request failed for {user_id} with status code {response.status_code}"
+                )
+        except requests.RequestException as e:
+            print(f"[ERROR] Audio generation request exception for {user_id}: {e}")
 
     def get_app(self):
         self.__app.include_router(self.__router)
