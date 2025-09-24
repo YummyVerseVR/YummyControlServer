@@ -104,7 +104,6 @@ class App:
 
     async def __send_email(self, user_id: str) -> JSONResponse:
         if not self.__db.is_exist(user_id):
-            print(f"now database: {self.__db}")
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
 
         user = self.__db.get_user(user_id)
@@ -119,44 +118,33 @@ class App:
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     async def __call_llm(self, request: str) -> ResponseModel:
+        print("[INFO] Calling LLM...")
         llm_response = await self.__llm.choose_dish(request)
         return llm_response
 
     async def __generate_model(self, user_id: str, request: str) -> None:
+        print("[INFO] Calling model generator...")
         data = {
             "user_id": user_id,
             "prompt": request,
         }
 
         try:
-            response = requests.post(
-                f"{self.__model_endpoint}/generate", json=data, timeout=300
-            )
-            if response.status_code == 200:
-                print(f"[INFO] Model generation request succeeded for {user_id}")
-            else:
-                print(
-                    f"[ERROR] Model generation request failed for {user_id} with status code {response.status_code}"
-                )
+            requests.post(f"{self.__model_endpoint}/generate", json=data)
+            print(f"[INFO] Model generation request succeeded for {user_id}")
         except requests.RequestException as e:
             print(f"[ERROR] Model generation request exception for {user_id}: {e}")
 
     async def __generate_audio(self, user_id: str, request: str) -> None:
+        print("[INFO] Calling audio generator...")
         data = {
             "user_id": user_id,
             "prompt": request,
         }
 
         try:
-            response = requests.post(
-                f"{self.__audio_endpoint}/generate", json=data, timeout=300
-            )
-            if response.status_code == 200:
-                print(f"[INFO] Audio generation request succeeded for {user_id}")
-            else:
-                print(
-                    f"[ERROR] Audio generation request failed for {user_id} with status code {response.status_code}"
-                )
+            requests.post(f"{self.__audio_endpoint}/generate", json=data)
+            print(f"[INFO] Audio generation request succeeded for {user_id}")
         except requests.RequestException as e:
             print(f"[ERROR] Audio generation request exception for {user_id}: {e}")
 

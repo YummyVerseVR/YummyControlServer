@@ -109,7 +109,7 @@ class UserData:
         Save metadata to a JSON file.
         """
         with open(self.__meta_path, "w") as f:
-            json.dump(self.meta, f, indent=4)
+            json.dump(self.meta.model_dump(), f, indent=4)
 
     def load_meta(self) -> None:
         """
