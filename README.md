@@ -1,28 +1,75 @@
 # ControlServer
 
 ## 実行方法
-.envファイルに送信用Gmailの情報を設定
-```
-FROM_EMAIL="送信元email"
-APP_PASSWORD="app pass"
-```
-アプリパスワードについては下記を参照
-
-https://support.google.com/mail/answer/185833?hl=ja
 ```
 uv sync
-
 uv run src/entry.py
 ```
 
-## /register-request
-GAS Serverから叩く用
-    email: str
-    request: str
+## APIエンドポイント
+このサーバは以下のAPIエンドポイントを提供します. 詳細な仕様についてはFastAPIの自動生成ドキュメント`http://0.0.0.0/8000/docs`を参照してください.
 
-## set-user-status
-DATABASE Serverからのnotify readyを受け取る用
-    uuid: str
-    is_ready: bool
+- `/request`: ユーザーのリクエスト
+    - メソッド: POST
+    - 説明: Google Formで収集したユーザのリクエストを元にデータの準備を開始します.
+    - リクエストの引数(**JSON**):
+        - `email` (str): ユーザーID
+        - `request` (str): ユーザーのリクエスト内容
 
-is_readyをfalseのとき、異常事態であるとする
+- `/{user_id}/status`: ユーザーステータスの取得
+    - メソッド: GET
+    - 説明: 指定されたユーザーのデータステータスを取得します. すべてのデータが準備できている場合は`true`を返します.
+
+- `/save/image`: モデル生成元の画像データの保存
+    - メソッド: POST
+    - 説明: 指定された画像データをユーザに紐づけて保存します.
+    - リクエストの引数:
+        - `user_id` (str): ユーザーID
+        - `file` (UploadFile): 画像データ (io.BytesIO型で受け取れる)
+
+- `/save/model`: モデルデータの保存
+    - メソッド: POST
+    - 説明: 指定されたモデルデータをユーザに紐づけて保存します.
+    - リクエストの引数:
+        - `user_id` (str): ユーザーID
+        - `file` (UploadFile): モデルデータ (io.BytesIO型で受け取れる)
+
+- `/save/audio`: 音声データの保存
+    - メソッド: POST
+    - 説明: 指定された音声データをユーザに紐づけて保存します.
+    - リクエストの引数:
+        - `user_id` (str): ユーザーID
+        - `file` (UploadFile): 音声データ (io.BytesIO型で受け取れる)
+
+- `/{user_id}/status`: ユーザーステータスの取得
+    - メソッド: GET
+    - 説明: 指定されたユーザーのデータステータスを取得します. すべてのデータが準備できている場合は`true`を返します.
+
+- `/{user_id}/image`: 画像データの取得
+    - メソッド: GET
+    - 説明: 指定されたユーザーの画像データを取得します.
+
+- `/{user_id}/model`: モデルデータの取得
+    - メソッド: GET
+    - 説明: 指定されたユーザーのモデルデータを取得します.
+
+- `/{user_id}/audio`: 音声データの取得
+    - メソッド: GET
+    - 説明: 指定されたユーザーの音声データを取得します
+
+- `/{user_id}/param`: パラメータデータの取得
+    - メソッド: GET
+    - 説明: 指定されたユーザーのパラメータデータを取得します
+
+- `/list`: ユーザーリストの取得
+    - メソッド: GET
+    - 説明: 現在サーバに登録されているユーザーのリストを取得します.
+    - リストの各要素:
+        - `uuid` (str): ユーザーID
+        - `email` (str): ユーザーのメールアドレス
+        - `request` (str): ユーザーのリクエスト内容
+        - `has_qr_code` (bool): ユーザーがQRコードを持っているかどうか
+
+- `/ping`: ヘルスチェック
+    - メソッド: GET
+    - 説明: サーバが稼働しているかどうかを確認します. 常に`pong`を返します.
