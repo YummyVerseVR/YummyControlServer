@@ -20,11 +20,12 @@ class ResponseModel(BaseModel):
     error: str = ""
 
 
-class LLM:
+class LLMController:
     def __init__(self, config: dict, debug_mode: bool = False):
         self.__debug = debug_mode
         self.__endpoint = config.get("endpoints", {})
         self.__config = config.get("ollama", {})
+        self.__candidates = self.__config.get("candidates", [])
         self.__client = self.__get_client()
 
     def __get_client(self) -> Client:
@@ -84,7 +85,15 @@ class LLM:
                 error=f"Failed to parse JSON response: {str(e)}",
             )
 
-    def choose_dish(self, user_request: str, candidates: list):
+    async def choose_dish(self, user_request: str) -> ResponseModel:
+        """
+        Calls the LLM to choose the best dish name based on user request and candidates.
+
+        Args:
+            user_request (str): The user's request or description.
+        Returns:
+            ResponseModel: The response from the LLM containing the best dish name and other details.
+        """
         ollama_model = self.__config.get("model", "gemma3:12b")
         prompt_path = self.__config.get("prompt", "")
         system_prompt = ""
@@ -98,7 +107,7 @@ class LLM:
         temperature = float(self.__config.get("temperature", 0))
         num_predict = int(self.__config.get("num_predict", 500))
 
-        user_input = {"query": user_request, "candidates": candidates}
+        user_input = {"query": user_request, "candidates": self.__candidates}
         user_input_json = json.dumps(user_input, ensure_ascii=False)
 
         if self.__debug:
@@ -112,7 +121,6 @@ class LLM:
                     "firmness": 6,
                     "translated": "Delicious sushi with fresh ingredients.",
                     "best_name": "Sushi Delight",
-                    "top_names": ["Sushi Delight", "Ocean's Bounty", "Fresh Catch"]
                 }
                 ```
                 """

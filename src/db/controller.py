@@ -1,12 +1,16 @@
+from io import BytesIO
 import shutil
 import os
 from typing import Any
+
+from fastapi import UploadFile
 
 from db.model import UserData
 
 
 class DataBase:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, debug_mode: bool = False):
+        self.__debug = debug_mode
         self.__config = config.get("db", {})
         db_path = self.__config.get("path", "~/YummyVerse")
         self.__db_path = os.path.expanduser(db_path)
@@ -75,25 +79,25 @@ class DataBase:
     def list_users(self) -> list[UserData]:
         return list(self.__tables.values())
 
-    def load_qr(self, user_id: str, qr_data: Any) -> None:
+    def load_qr(self, user_id: str, qr_data: BytesIO) -> None:
         if user_id not in self.__tables.keys():
             raise ValueError(f"User {user_id} not found in database.")
 
         self.__tables[user_id].load_qr(qr_data)
 
-    def load_image(self, user_id: str, image_data: Any) -> None:
+    def load_image(self, user_id: str, image_data: UploadFile) -> None:
         if user_id not in self.__tables.keys():
             raise ValueError(f"User {user_id} not found in database.")
 
         self.__tables[user_id].load_image(image_data)
 
-    def load_model(self, user_id: str, model_data: Any) -> None:
+    def load_model(self, user_id: str, model_data: UploadFile) -> None:
         if user_id not in self.__tables.keys():
             raise ValueError(f"User {user_id} not found in database.")
 
         self.__tables[user_id].load_model(model_data)
 
-    def load_audio(self, user_id: str, audio_data: Any) -> None:
+    def load_audio(self, user_id: str, audio_data: UploadFile) -> None:
         if user_id not in self.__tables.keys():
             raise ValueError(f"User {user_id} not found in database.")
 

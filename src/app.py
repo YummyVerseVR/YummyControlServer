@@ -1,31 +1,31 @@
 import asyncio
 import uuid
+import os
 import requests
 
 from pydantic import BaseModel
 
-from fastapi import FastAPI, APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, APIRouter, Form, UploadFile, File
+from fastapi.responses import JSONResponse, FileResponse
 
 from db.controller import DataBase
+
+from llm.controller import LLMController, ResponseModel
+
 from qr.email import EmailSender
 from qr.handler import QRHandler, RequestItem
 
 
-class UserState(BaseModel):
-    uuid: str
-    is_ready: bool
-
-
-class Request(BaseModel):
+class UserRequest(BaseModel):
     email: str
     body: str
 
 
 class App:
     def __init__(self, config: dict, debug_mode: bool = False):
-        self.__db = DataBase(config.get("db", {}))
-        self.__qr_handler = QRHandler()
+        self.__db = DataBase(config, debug_mode)
+        self.__llm = LLMController(config, debug_mode)
+        self.__qr_handler = QRHandler(config, debug_mode)
         self.__email_sender = EmailSender(config.get("email", {}), debug_mode)
 
         self.__app = FastAPI()
@@ -34,14 +34,54 @@ class App:
 
     def __setup_routes(self):
         self.__router.add_api_route(
-            "/set-status",
-            self.set_status,
-            methods=["POST"],
-        )
-        self.__router.add_api_route(
             "/request",
             self.request,
             methods=["POST"],
+        )
+        self.__router.add_api_route(
+            "/save/image",
+            self.save_image,
+            methods=["POST"],
+        )
+        self.__router.add_api_route(
+            "/save/model",
+            self.save_model,
+            methods=["POST"],
+        )
+        self.__router.add_api_route(
+            "/save/audio",
+            self.save_audio,
+            methods=["POST"],
+        )
+        self.__router.add_api_route(
+            "/{user_id}/status",
+            self.status,
+            methods=["GET"],
+        )
+        self.__router.add_api_route(
+            "/{user_id}/qr",
+            self.get_qr,
+            methods=["GET"],
+        )
+        self.__router.add_api_route(
+            "/{user_id}/image",
+            self.get_image,
+            methods=["GET"],
+        )
+        self.__router.add_api_route(
+            "/{user_id}/model",
+            self.get_model,
+            methods=["GET"],
+        )
+        self.__router.add_api_route(
+            "/{user_id}/audio",
+            self.get_audio,
+            methods=["GET"],
+        )
+        self.__router.add_api_route(
+            "/{user_id}/param",
+            self.get_param,
+            methods=["GET"],
         )
         self.__router.add_api_route(
             "/list",
@@ -54,12 +94,36 @@ class App:
             methods=["GET"],
         )
 
+    async def __send_email(self, user_id: str) -> JSONResponse:
+        if not self.__db.is_exist(user_id):
+            print(f"now database: {self.__db}")
+            return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
+
+        user = self.__db.get_user(user_id)
+        if user is None or not user.meta.email or not user.meta.qr_code:
+            return JSONResponse(
+                content={"detail": "User data incomplete"}, status_code=500
+            )
+
+        to = user.meta.email
+        qr_code = user.meta.qr_code
+        asyncio.create_task(self.__email_sender.send_email(to, qr_code))
+        return JSONResponse(content={"detail": "QR Code sent successfully"})
+
+    async def __call_llm(self, request: str) -> ResponseModel:
+        llm_response = await self.__llm.choose_dish(request)
+        return llm_response
+
+    async def __generate_model(self, user_id: str, request: str) -> bool: ...
+
+    async def __generate_audio(self, user_id: str, request: str) -> bool: ...
+
     def get_app(self):
         self.__app.include_router(self.__router)
         return self.__app
 
     # /request
-    async def request(self, request: Request) -> JSONResponse:
+    async def request(self, request: UserRequest) -> JSONResponse:
         generated_uuid = str(uuid.uuid4())
         qr_data, qr_image = self.__qr_handler.generate_qr(
             RequestItem(uuid=generated_uuid, request=request.body)
@@ -83,33 +147,166 @@ class App:
         print(f"  email : {request.email}")
         print(f"  uuid : {generated_uuid}")
         print(f"  request : {request.body}")
+
+        llm_response = await self.__call_llm(request.body)
+        self.__db.load_param(generated_uuid, llm_response.model_dump())
+        asyncio.create_task(self.__generate_model(generated_uuid, request.body))
+        asyncio.create_task(self.__generate_audio(generated_uuid, request.body))
+
         return JSONResponse(
             content={"detail": f"UUID:{generated_uuid}"}, status_code=200
         )
 
-    # /set-status
-    async def set_status(self, state: UserState) -> JSONResponse:
-        if not self.__db.is_exist(state.uuid):
-            print(f"now database: {self.__db}")
-            return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
-
-        if not state.is_ready:
-            self.__db.remove_user(state.uuid)
+    # /save/image
+    async def save_image(
+        self,
+        user_id: str = Form(...),
+        file: UploadFile = File(...),
+    ) -> JSONResponse:
+        if not self.__db.is_exist(user_id):
             return JSONResponse(
-                content={"detail": "some thing wrong. please try again"},
-                status_code=400,
+                status_code=404,
+                content={"message": f"User {user_id} not found."},
             )
 
-        user = self.__db.get_user(state.uuid)
-        if user is None or user.meta.email == "" or user.meta.qr_code == "":
+        self.__db.load_image(user_id, file)
+
+        if self.__db.is_ready(user_id):
+            asyncio.create_task(self.__send_email(user_id))
+
+        return JSONResponse(
+            {"message": f"Image file for user {uuid} saved successfully."}
+        )
+
+    # /save/model
+    async def save_model(
+        self,
+        user_id: str = Form(...),
+        file: UploadFile = File(...),
+    ) -> JSONResponse:
+        if not self.__db.is_exist(user_id):
             return JSONResponse(
-                content={"detail": "User data incomplete"}, status_code=500
+                status_code=404,
+                content={"message": f"User {user_id} not found."},
             )
 
-        to = user.meta.email
-        qr_code = user.meta.qr_code
-        asyncio.create_task(self.__email_sender.send_email(to, qr_code))
-        return JSONResponse(content={"detail": "QR Code sent successfully"})
+        self.__db.load_model(user_id, file)
+
+        if self.__db.is_ready(user_id):
+            asyncio.create_task(self.__send_email(user_id))
+
+        return JSONResponse(
+            {"message": f"Model file for user {uuid} saved successfully."}
+        )
+
+    # /save/audio
+    async def save_audio(
+        self,
+        user_id: str = Form(...),
+        file: UploadFile = File(...),
+    ) -> JSONResponse:
+        if not self.__db.is_exist(user_id):
+            return JSONResponse(
+                status_code=404,
+                content={"message": f"User {user_id} not found."},
+            )
+
+        self.__db.load_audio(user_id, file)
+
+        if self.__db.is_ready(user_id):
+            asyncio.create_task(self.__send_email(user_id))
+
+        return JSONResponse(
+            {"message": f"Audio file for user {uuid} saved successfully."}
+        )
+
+    # /{user_id}/status
+    async def status(self, user_id: str) -> JSONResponse:
+        return JSONResponse(
+            {
+                "user_id": str(user_id),
+                "status": self.__db.is_ready(user_id),
+            }
+        )
+
+    # /{user_id}/qr
+    async def get_qr(self, user_id: str) -> FileResponse:
+        qr_path = ""
+        if (userdata := self.__db.get_user(user_id)) is not None:
+            qr_path = userdata.get_qr_path()
+        else:
+            return FileResponse("./dummy", status_code=404)
+
+        if not qr_path or not os.path.exists(qr_path):
+            return FileResponse("./dummy", status_code=404)
+
+        return FileResponse(
+            qr_path, media_type="image/png", filename=os.path.basename(qr_path)
+        )
+
+    # /{user_id}/image
+    async def get_image(self, user_id: str) -> FileResponse:
+        image_path = ""
+        if (userdata := self.__db.get_user(user_id)) is not None:
+            image_path = userdata.get_image_path()
+        else:
+            return FileResponse("./dummy", status_code=404)
+
+        if not image_path or not os.path.exists(image_path):
+            return FileResponse("./dummy", status_code=404)
+
+        return FileResponse(
+            image_path, media_type="image/png", filename=os.path.basename(image_path)
+        )
+
+    # /{user_id}/model
+    async def get_model(self, user_id: str) -> FileResponse:
+        model_path = ""
+        if (userdata := self.__db.get_user(user_id)) is not None:
+            model_path = userdata.get_model_path()
+        else:
+            return FileResponse("./dummy", status_code=404)
+
+        if not model_path or not os.path.exists(model_path):
+            return FileResponse("./dummy", status_code=404)
+
+        return FileResponse(
+            model_path,
+            media_type="application/octet-stream",
+            filename=os.path.basename(model_path),
+        )
+
+    # /{user_id}/audio
+    async def get_audio(self, user_id: str) -> FileResponse:
+        audio_path = ""
+        if (userdata := self.__db.get_user(user_id)) is not None:
+            audio_path = userdata.get_audio_path()
+        else:
+            return FileResponse("./dummy", status_code=404)
+
+        if not audio_path or not os.path.exists(audio_path):
+            return FileResponse("./dummy", status_code=404)
+
+        return FileResponse(
+            audio_path, media_type="audio/wav", filename=os.path.basename(audio_path)
+        )
+
+    # /{user_id}/param
+    async def get_param(self, user_id: str) -> FileResponse:
+        param_path = ""
+        if (userdata := self.__db.get_user(user_id)) is not None:
+            param_path = userdata.get_param_path()
+        else:
+            return FileResponse("./dummy", status_code=404)
+
+        if not param_path or not os.path.exists(param_path):
+            return FileResponse("./dummy", status_code=404)
+
+        return FileResponse(
+            param_path,
+            media_type="application/json",
+            filename=os.path.basename(param_path),
+        )
 
     # /list
     async def list_db(self) -> JSONResponse:

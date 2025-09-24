@@ -1,15 +1,12 @@
 import argparse
+import json
 import uvicorn
 from app import App
 
+
+CONFIG_PATH = "./settings/meta.json"
+
 parser = argparse.ArgumentParser(description="Run the FastAPI application.")
-parser.add_argument(
-    "-q",
-    "--qr-server",
-    type=str,
-    default="http://192.168.11.101:8006",
-    help="QR code server address",
-)
 parser.add_argument(
     "-p",
     "--port",
@@ -25,8 +22,9 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-app = App(args.qr_server,
-          args.debug
-        ).get_app()
+with open(CONFIG_PATH, "r") as f:
+    config = json.load(f)
+
+app = App(config, args.debug).get_app()
 if __name__ == "__main__":
     uvicorn.run("entry:app", host="0.0.0.0", port=args.port)

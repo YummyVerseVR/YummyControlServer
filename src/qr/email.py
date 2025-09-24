@@ -25,19 +25,19 @@ class EmailSender:
         if self.__debug:
             return None
 
-        creds_path = self.__config.get("token", "./settings/token.json")
-        token_path = self.__config.get("credentials", "./settings/credentials.json")
+        token_path = self.__config.get("token", "./settings/token.json")
+        creds_path = self.__config.get("credentials", "./settings/credentials.json")
         scopes = self.__config.get(
             "scopes", ["https://www.googleapis.com/auth/gmail.send"]
         )
         creds = None
-        if os.path.exists(creds_path):
+        if os.path.exists(token_path):
             creds = Credentials.from_authorized_user_file(token_path, scopes)
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                flow = InstalledAppFlow.from_client_secrets_file(token_path, scopes)
+                flow = InstalledAppFlow.from_client_secrets_file(creds_path, scopes)
                 creds = flow.run_local_server(port=0)
             with open(token_path, "w") as token:
                 token.write(creds.to_json())

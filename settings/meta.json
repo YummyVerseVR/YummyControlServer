@@ -1,28 +1,36 @@
 {
-    "root": "setting",
-    "host": "0.0.0.0",
-    "port": 8000,
     "db": {
         "path": "~/HDD"
     },
     "endpoints": {
-        "audio": "http://192.168.11.100:8002",
-        "model": "http://192.168.11.100:8003",
-        "llm": "http://192.168.11.101:8004",
-        "ollama": "http://192.168.11.144:11434",
-    }
+        "audio": "http://192.168.11.100:8001",
+        "model": "http://192.168.11.100:8002",
+        "ollama": "http://192.168.11.144:11434"
+    },
     "ollama": {
         "model": "gemma3:12b",
         "prompt": "./settings/prompt.txt",
+        "candidates": [
+            { "name": "じゃがりこ" },
+            { "name": "せんべい" },
+            { "name": "タフグミ" },
+            { "name": "ハイチュウプレミアム" },
+            { "name": "茎わかめ" },
+            { "name": "エビ塩揚げせんべい" },
+            { "name": "カルパス" },
+            { "name": "バナナ" },
+            { "name": "マシュマロ" },
+            { "name": "乾パン" },
+            { "name": "豚骨醤油ラーメン" },
+            { "name": "ピザ" }
+        ],
         "temperature": 0.0,
         "num_predict": 500
     },
     "email": {
-        "scopes": [
-            "https://www.googleapis.com/auth/gmail.send"
-        ],
+        "scopes": ["https://www.googleapis.com/auth/gmail.send"],
         "from": "yummyversevr@gmail.com",
-        "credential": "./settings/credential.json",
-        "token": "./settings/token.json"
+        "credential": "settings/credential.json",
+        "token": "settings/token.json"
     }
 }

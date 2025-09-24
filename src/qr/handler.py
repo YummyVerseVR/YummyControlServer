@@ -11,8 +11,9 @@ class RequestItem(BaseModel):
 
 
 class QRHandler:
-    def __init__(self):
-        pass
+    def __init__(self, config: dict, debug_mode: bool = False) -> None:
+        self.__debug = debug_mode
+        self.__config = config.get("qr", {})
 
     def generate_qr(self, item: RequestItem) -> tuple[str, BytesIO]:
         """
