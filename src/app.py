@@ -4,12 +4,12 @@ import os
 import requests
 
 from pydantic import BaseModel
+from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, APIRouter, Form, UploadFile, File
 from fastapi.responses import JSONResponse, FileResponse
 
 from db.controller import DataBase
-
 from llm.controller import LLMController, ResponseModel
 
 from qr.email import EmailSender
@@ -36,6 +36,8 @@ class App:
             "model", "http://192.168.11.100:8002"
         )
 
+        self.__executor = ThreadPoolExecutor()
+        self.__loop = asyncio.get_running_loop()
         self.__app = FastAPI()
         self.__router = APIRouter()
         self.__setup_routes()
@@ -192,8 +194,14 @@ class App:
 
         llm_response = await self.__call_llm(request.request)
         self.__db.load_param(generated_uuid, llm_response.model_dump())
-        asyncio.create_task(self.__generate_model(generated_uuid, request.request))
-        asyncio.create_task(self.__generate_audio(generated_uuid, request.request))
+
+        with self.__executor as pool:
+            self.__loop.run_in_executor(
+                pool, self.__generate_model, generated_uuid, request.request
+            )
+            self.__loop.run_in_executor(
+                pool, self.__generate_audio, generated_uuid, request.request
+            )
 
         return JSONResponse(
             content={"detail": f"UUID:{generated_uuid}"}, status_code=200
