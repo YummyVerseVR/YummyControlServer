@@ -37,7 +37,6 @@ class App:
         )
 
         self.__executor = ThreadPoolExecutor()
-        self.__loop = asyncio.get_running_loop()
         self.__app = FastAPI()
         self.__router = APIRouter()
         self.__setup_routes()
@@ -124,7 +123,7 @@ class App:
         llm_response = await self.__llm.choose_dish(request)
         return llm_response
 
-    async def __generate_model(self, user_id: str, request: str) -> None:
+    def __generate_model(self, user_id: str, request: str) -> None:
         print("[INFO] Calling model generator...")
         data = {
             "user_id": user_id,
@@ -137,7 +136,7 @@ class App:
         except requests.RequestException as e:
             print(f"[ERROR] Model generation request exception for {user_id}: {e}")
 
-    async def __generate_audio(self, user_id: str, request: str) -> None:
+    def __generate_audio(self, user_id: str, request: str) -> None:
         print("[INFO] Calling audio generator...")
         data = {
             "user_id": user_id,
@@ -184,12 +183,8 @@ class App:
         self.__db.load_param(generated_uuid, llm_response.model_dump())
 
         with self.__executor as pool:
-            self.__loop.run_in_executor(
-                pool, self.__generate_model, generated_uuid, request.request
-            )
-            self.__loop.run_in_executor(
-                pool, self.__generate_audio, generated_uuid, request.request
-            )
+            pool.submit(self.__generate_model, generated_uuid, request.request)
+            pool.submit(self.__generate_audio, generated_uuid, request.request)
 
         return JSONResponse(
             content={"detail": f"UUID:{generated_uuid}"}, status_code=200
