@@ -36,13 +36,7 @@ class QRHandler:
         img_buf = BytesIO()
         img.save(img_buf, format="PNG")
         img_buf.seek(0)
-
         qr_code_base64 = base64.b64encode(buf.read()).decode("utf-8")
-
         buf.close()
-        # show qr
-        print(qr_code_base64)
-
-        img_buf.close()
 
         return qr_code_base64, img_buf
