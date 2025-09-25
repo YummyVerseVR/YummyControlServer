@@ -15,14 +15,19 @@ parser.add_argument(
     help="Port to run the FastAPI application on",
 )
 parser.add_argument(
+    "--config",
+    type=str,
+    default=CONFIG_PATH,
+    help="Path to the configuration file",
+)
+parser.add_argument(
     "--debug",
-    type=bool,
-    default=False,
-    help="Enable debug mode",
+    action="store_true",
+    help="Run the application in debug mode",
 )
 args = parser.parse_args()
 
-with open(CONFIG_PATH, "r") as f:
+with open(args.config, "r") as f:
     config = json.load(f)
 
 app = App(config, args.debug).get_app()

@@ -2,12 +2,6 @@ import qrcode
 import base64
 
 from io import BytesIO
-from pydantic import BaseModel
-
-
-class RequestItem(BaseModel):
-    uuid: str
-    request: str
 
 
 class QRHandler:
@@ -15,7 +9,7 @@ class QRHandler:
         self.__debug = debug_mode
         self.__config = config.get("qr", {})
 
-    def generate_qr(self, item: RequestItem) -> tuple[str, BytesIO]:
+    def generate_qr(self, user_id: str) -> tuple[str, BytesIO]:
         """
         Generate a QR code for the given item uuid and return it as a base64-encoded string.
 
@@ -23,10 +17,10 @@ class QRHandler:
             item (Item): An instance of Item containing uuid and request.
         """
         print("[INFO] Generating QR code...")
-        print(f"  Request: {item.uuid} / {item.request}")
+        print(f"  User ID: {user_id}")
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
 
-        qr.add_data(item.uuid)
+        qr.add_data(user_id)
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")
