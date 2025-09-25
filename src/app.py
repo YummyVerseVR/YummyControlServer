@@ -41,6 +41,9 @@ class App:
         self.__router = APIRouter()
         self.__setup_routes()
 
+    def __del__(self):
+        self.__executor.shutdown(True)
+
     def __setup_routes(self):
         self.__router.add_api_route(
             "/request",
@@ -115,7 +118,7 @@ class App:
 
         to = user.meta.email
         qr_code = user.meta.qr_code
-        asyncio.create_task(self.__email_sender.send_email(to, qr_code))
+        self.__executor.submit(self.__email_sender.send_email, to, qr_code)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     async def __call_llm(self, request: str) -> ResponseModel:
@@ -182,9 +185,8 @@ class App:
         llm_response = await self.__call_llm(request.request)
         self.__db.load_param(generated_uuid, llm_response.model_dump())
 
-        with self.__executor as pool:
-            pool.submit(self.__generate_model, generated_uuid, request.request)
-            pool.submit(self.__generate_audio, generated_uuid, request.request)
+        self.__executor.submit(self.__generate_model, generated_uuid, request.request)
+        self.__executor.submit(self.__generate_audio, generated_uuid, request.request)
 
         return JSONResponse(
             content={"detail": f"UUID:{generated_uuid}"}, status_code=200

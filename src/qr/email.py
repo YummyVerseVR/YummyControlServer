@@ -43,7 +43,7 @@ class EmailSender:
                 token.write(creds.to_json())
         return build("gmail", "v1", credentials=creds)
 
-    async def send_email(self, to: str, qr_code: str):
+    def send_email(self, to: str, qr_code: str):
         if self.__debug or self.__service is None:
             return
 
