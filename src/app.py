@@ -13,7 +13,7 @@ from db.controller import DataBase
 from llm.controller import LLMController, ResponseModel
 
 from qr.email import EmailSender
-from qr.handler import QRHandler, RequestItem
+from qr.handler import QRHandler
 
 
 class UserRequest(BaseModel):
@@ -23,6 +23,7 @@ class UserRequest(BaseModel):
 
 class App:
     def __init__(self, config: dict, debug_mode: bool = False):
+        self.__debug = debug_mode
         self.__db = DataBase(config, debug_mode)
         self.__llm = LLMController(config, debug_mode)
         self.__qr_handler = QRHandler(config, debug_mode)
@@ -62,6 +63,14 @@ class App:
             self.save_audio,
             methods=["POST"],
         )
+
+        if self.__debug:
+            self.__router.add_api_route(
+                "/create",
+                self.create,
+                methods=["GET"],
+            )
+
         self.__router.add_api_route(
             "/{user_id}/status",
             self.status,
@@ -103,6 +112,12 @@ class App:
             methods=["GET"],
         )
 
+    def __post(self, *args, **kwargs):
+        if self.__debug:
+            print(f"[DEBUG] POST request to {args[0]} with {kwargs}")
+        else:
+            requests.post(*args, **kwargs)
+
     async def __send_email(self, user_id: str) -> JSONResponse:
         if not self.__db.is_exist(user_id):
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
@@ -131,7 +146,7 @@ class App:
         }
 
         try:
-            requests.post(f"{self.__model_endpoint}/generate", json=data)
+            self.__post(f"{self.__model_endpoint}/generate", json=data)
             print(f"[INFO] Model generation request succeeded for {user_id}")
         except requests.RequestException as e:
             print(f"[ERROR] Model generation request exception for {user_id}: {e}")
@@ -144,7 +159,7 @@ class App:
         }
 
         try:
-            requests.post(f"{self.__audio_endpoint}/generate", json=data)
+            self.__post(f"{self.__audio_endpoint}/generate", json=data)
             print(f"[INFO] Audio generation request succeeded for {user_id}")
         except requests.RequestException as e:
             print(f"[ERROR] Audio generation request exception for {user_id}: {e}")
@@ -153,12 +168,38 @@ class App:
         self.__app.include_router(self.__router)
         return self.__app
 
+    # /create
+    async def create(self) -> JSONResponse:
+        generated_uuid = str(uuid.uuid4())
+        qr_data, qr_image = self.__qr_handler.generate_qr(generated_uuid)
+
+        self.__db.add_user(generated_uuid)
+        self.__db.load_qr(generated_uuid, qr_image)
+
+        user = self.__db.get_user(generated_uuid)
+        if user is None:
+            return JSONResponse(
+                content={"detail": "Failed to add user"}, status_code=500
+            )
+
+        user.meta.email = "debuguser@debug.com"
+        user.meta.qr_code = qr_data
+        user.meta.request = "Debug request"
+        user.save_meta()
+
+        print("[INFO] New request registered")
+        print(f"  email : {user.meta.email}")
+        print(f"  uuid : {generated_uuid}")
+        print(f"  request : {user.meta.request}")
+
+        return JSONResponse(
+            content={"user_id": f"UUID:{generated_uuid}"}, status_code=200
+        )
+
     # /request
     async def request(self, request: UserRequest) -> JSONResponse:
         generated_uuid = str(uuid.uuid4())
-        qr_data, qr_image = self.__qr_handler.generate_qr(
-            RequestItem(uuid=generated_uuid, request=request.request)
-        )
+        qr_data, qr_image = self.__qr_handler.generate_qr(generated_uuid)
 
         self.__db.add_user(generated_uuid)
         self.__db.load_qr(generated_uuid, qr_image)
@@ -175,11 +216,16 @@ class App:
         user.save_meta()
 
         print("[INFO] New request registered")
-        print(f"  email : {request.email}")
+        print(f"  email : {user.meta.email}")
         print(f"  uuid : {generated_uuid}")
-        print(f"  request : {request.request}")
+        print(f"  request : {user.meta.request}")
 
-        llm_response = await self.__call_llm(request.request)
+        llm_response: ResponseModel
+        if self.__debug:
+            llm_response = ResponseModel()
+        else:
+            llm_response = await self.__call_llm(request.request)
+
         self.__db.load_param(generated_uuid, llm_response.model_dump())
 
         with self.__executor as pool:
