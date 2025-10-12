@@ -393,6 +393,7 @@ class App:
         result = [
             {
                 "uuid": user.get_uuid(),
+                "status": self.__db.is_ready(user.get_uuid()),
                 # For privacy, do not expose email
                 # "email": user.meta.email,
                 "request": user.meta.request,
