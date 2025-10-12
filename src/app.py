@@ -101,9 +101,14 @@ class App:
             self.get_param,
             methods=["GET"],
         )
+        # self.__router.add_api_route(
+        #     "/list",
+        #     self.list_db,
+        #     methods=["GET"],
+        # )
         self.__router.add_api_route(
-            "/list",
-            self.list_db,
+            "/get-users",
+            self.get_users,
             methods=["GET"],
         )
         self.__router.add_api_route(
@@ -388,16 +393,30 @@ class App:
         )
 
     # /list
-    async def list_db(self) -> JSONResponse:
-        users = self.__db.list_users()
+    # async def list_db(self) -> JSONResponse:
+    #     users = self.__db.list_users()
+    #     result = [
+    #         {
+    #             "uuid": user.get_uuid(),
+    #             "status": self.__db.is_ready(user.get_uuid()),
+    #             "request": user.meta.request,
+    #             # For privacy, do not expose email
+    #             # "email": user.meta.email,
+    #         }
+    #         for user in users
+    #     ]
+    #     return JSONResponse(content={"users": result}, status_code=200)
+
+    # /get-users
+    async def get_users(self, n: int = 10) -> JSONResponse:
+        users = self.__db.list_users()[:n]
         result = [
             {
                 "uuid": user.get_uuid(),
                 "status": self.__db.is_ready(user.get_uuid()),
+                "request": user.meta.request,
                 # For privacy, do not expose email
                 # "email": user.meta.email,
-                "request": user.meta.request,
-                "qr": user.meta.qr_code,
             }
             for user in users
         ]
