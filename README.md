@@ -72,7 +72,7 @@ uv run src/entry.py
         - `uuid` (str): ユーザーID
         - `status` (bool): ユーザーデータが準備完了しているかどうか
         - `request` (str): ユーザーのリクエスト内容
-        - `has_qr_code` (bool): ユーザーがQRコードを持っているかどうか
+        - `qr` (str): ユーザーがQRコード
 
 - `/ping`: ヘルスチェック
     - メソッド: GET
