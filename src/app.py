@@ -393,9 +393,10 @@ class App:
         result = [
             {
                 "uuid": user.get_uuid(),
-                "email": user.meta.email,
+                # For privacy, do not expose email
+                # "email": user.meta.email,
                 "request": user.meta.request,
-                "has_qr": user.meta.qr_code != "",
+                "qr": user.meta.qr_code,
             }
             for user in users
         ]
