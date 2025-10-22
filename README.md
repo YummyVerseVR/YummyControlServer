@@ -40,7 +40,7 @@ uv run src/entry.py
         "prompt": "Ollamaへのプロンプトテンプレート(任意)",
         "candidates": [
             "近い食感か判定するための候補リスト(任意)",
-            "{ \"name\": \"食品名\" } の形式で複数指定",
+            "{ name: 食品名 } の形式で複数指定",
         ],
         "temperature": "モデルの温度(任意)",
         "num_predict": "思考回数(任意)"
