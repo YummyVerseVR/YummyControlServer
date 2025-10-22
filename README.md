@@ -27,29 +27,29 @@ uv run src/entry.py
 ```json
 {
     "db": {
-        "path": "データベースのパス(必須)"
+        "path": "データベースのパス(任意)"
     },
     "endpoints": {
-        "audio": "オーディオ生成サーバのURL(必須)",
-        "model": "モデル生成サーバのURL(必須)",
-        "ollama": "OllamaサーバのURL(必須)",
+        "audio": "オーディオ生成サーバのURL(任意)",
+        "model": "モデル生成サーバのURL(任意)",
+        "ollama": "OllamaサーバのURL(任意)",
         "logger": "ログサーバのURL(任意)"
     },
     "ollama": {
-        "model": "モデル名(必須)",
-        "prompt": "Ollamaへのプロンプトテンプレート(必須)",
+        "model": "モデル名(任意)",
+        "prompt": "Ollamaへのプロンプトテンプレート(任意)",
         "candidates": [
-            "近い食感か判定するための候補リスト(必須)",
+            "近い食感か判定するための候補リスト(任意)",
             "{ "name": "食品名" } の形式で複数指定",
         ],
         "temperature": "モデルの温度(任意)",
         "num_predict": "思考回数(任意)"
     },
     "email": {
-        "scopes": ["Google APIのスコープ(必須)"],
-        "from": "送信元メールアドレス(必須)",
-        "credential": "Google APIの認証情報ファイルパス(必須)",
-        "token": "Google APIのトークンファイルパス(必須)"
+        "scopes": ["Google APIのスコープ(任意)"],
+        "from": "送信元メールアドレス(任意)",
+        "credential": "Google APIの認証情報ファイルパス(任意)",
+        "token": "Google APIのトークンファイルパス(任意)"
     }
 }
 ```
