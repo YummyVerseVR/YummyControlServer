@@ -129,7 +129,10 @@ class App:
 
     def __post(self, *args, **kwargs):
         if self.__debug:
-            print(f"[DEBUG] POST request to {args[0]} with {kwargs}")
+            self.__logger.log(
+                f"[DEBUG] POST request to {args[0]} with {kwargs}",
+                LogLevel.DEBUG,
+            )
         else:
             requests.post(*args, **kwargs)
 
@@ -168,9 +171,15 @@ class App:
 
         try:
             self.__post(f"{self.__model_endpoint}/generate", json=data)
-            print(f"[INFO] Model generation request succeeded for {user_id}")
+            self.__logger.log(
+                f"Model generation request succeeded for {user_id}",
+                LogLevel.INFO,
+            )
         except requests.RequestException as e:
-            print(f"[ERROR] Model generation request exception for {user_id}: {e}")
+            self.__logger.log(
+                f"Model generation request exception for {user_id}: {e}",
+                LogLevel.ERROR,
+            )
 
     def __generate_audio(self, user_id: str, request: str) -> None:
         self.__logger.log(
@@ -219,7 +228,7 @@ class App:
 
         self.__logger.log(
             f"Debug user created with UUID: {generated_uuid} and request: {user.meta.request}",
-            LogLevel.INFO,
+            LogLevel.DEBUG,
         )
 
         return JSONResponse(
