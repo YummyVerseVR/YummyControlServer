@@ -24,7 +24,7 @@ class UserRequest(BaseModel):
 
 
 class App:
-    def __init__(self, config: dict, debug_mode: bool = False):
+    def __init__(self, config: dict, debug_mode: bool = False, logging: bool = False):
         self.__debug = debug_mode
         self.__db = DataBase(config, debug_mode)
         self.__llm = LLMController(config, debug_mode)
@@ -42,15 +42,15 @@ class App:
             "logger", "http://logger.local:9000"
         )
 
-        if self.__debug:
+        if logging:
+            self.__logger = Client("YummyControlServer", self.__logger_endpoint)
+        else:
 
             class DummyLogger:
                 def log(self, *_):
                     pass
 
             self.__logger = DummyLogger()
-        else:
-            self.__logger = Client("YummyControlServer", self.__logger_endpoint)
 
         self.__executor = ThreadPoolExecutor()
         self.__app = FastAPI()
