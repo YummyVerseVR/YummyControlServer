@@ -765,8 +765,8 @@ wheels = [
 
 [[package]]
 name = "pylognet"
-version = "0.1.0"
-source = { git = "https://github.com/upiscium/pylognet#d4362a4cd33e9fe4590cb948e703b59cb40693fe" }
+version = "0.2.0"
+source = { git = "https://github.com/upiscium/pylognet#e2736bf6410426d76173f089c678f923bdf0f478" }
 dependencies = [
     { name = "fastapi" },
     { name = "requests" },

@@ -2,6 +2,8 @@ import os
 import json
 from ollama import Client
 from pydantic import BaseModel
+from pylognet.client import LoggingClient
+from pylognet.client import LogLevel
 
 
 class TopNames(BaseModel):
@@ -21,8 +23,14 @@ class ResponseModel(BaseModel):
 
 
 class LLMController:
-    def __init__(self, config: dict, debug_mode: bool = False):
+    def __init__(
+        self,
+        config: dict,
+        logger: LoggingClient,
+        debug_mode: bool = False,
+    ):
         self.__debug = debug_mode
+        self.__logger = logger
         self.__endpoint = config.get("endpoints", {})
         self.__config = config.get("ollama", {})
         self.__candidates = self.__config.get("candidates", [])
@@ -111,7 +119,10 @@ class LLMController:
         user_input_json = json.dumps(user_input, ensure_ascii=False)
 
         if self.__debug:
-            print("[DEBUG] Debug mode is enabled, skipping LLM call")
+            self.__logger.log(
+                "Debug mode is enabled, skipping LLM call",
+                LogLevel.DEBUG,
+            )
             return self.__extract_json_block(
                 """
                 ```json

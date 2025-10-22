@@ -4,7 +4,7 @@ import os
 import requests
 
 
-from pylognet.client import Client, LogLevel
+from pylognet.client import LoggingClient, LogLevel
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor
 
@@ -26,11 +26,6 @@ class UserRequest(BaseModel):
 class App:
     def __init__(self, config: dict, debug_mode: bool = False, logging: bool = False):
         self.__debug = debug_mode
-        self.__db = DataBase(config, debug_mode)
-        self.__llm = LLMController(config, debug_mode)
-        self.__qr_handler = QRHandler(config, debug_mode)
-        self.__email_sender = EmailSender(config.get("email", {}), debug_mode)
-
         self.__endpoints = config.get("endpoints", {})
         self.__audio_endpoint = self.__endpoints.get(
             "audio", "http://192.168.11.100:8001"
@@ -42,15 +37,18 @@ class App:
             "logger", "http://logger.local:9000"
         )
 
-        if logging:
-            self.__logger = Client("YummyControlServer", self.__logger_endpoint)
-        else:
+        self.__logger = LoggingClient(
+            "YummyControlServer",
+            self.__logger_endpoint,
+            disable=not logging,
+        )
 
-            class DummyLogger:
-                def log(self, *_):
-                    pass
-
-            self.__logger = DummyLogger()
+        self.__db = DataBase(config, self.__logger, debug_mode)
+        self.__llm = LLMController(config, self.__logger, debug_mode)
+        self.__qr_handler = QRHandler(config, self.__logger, debug_mode)
+        self.__email_sender = EmailSender(
+            config.get("email", {}), self.__logger, debug_mode
+        )
 
         self.__executor = ThreadPoolExecutor()
         self.__app = FastAPI()
@@ -130,7 +128,7 @@ class App:
     def __post(self, *args, **kwargs):
         if self.__debug:
             self.__logger.log(
-                f"[DEBUG] POST request to {args[0]} with {kwargs}",
+                f"POST request to {args[0]} with {kwargs}",
                 LogLevel.DEBUG,
             )
         else:

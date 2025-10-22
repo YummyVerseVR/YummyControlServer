@@ -1,7 +1,7 @@
 from io import BytesIO
+from pylognet.client import LoggingClient
 import shutil
 import os
-from typing import Any
 
 from fastapi import UploadFile
 
@@ -9,8 +9,14 @@ from db.model import UserData
 
 
 class DataBase:
-    def __init__(self, config: dict, debug_mode: bool = False):
+    def __init__(
+        self,
+        config: dict,
+        logger: LoggingClient,
+        debug_mode: bool = False,
+    ) -> None:
         self.__debug = debug_mode
+        self.__logger = logger
         self.__config = config.get("db", {})
         db_path = self.__config.get("path", "~/YummyVerse")
         self.__db_path = os.path.expanduser(db_path)
