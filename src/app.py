@@ -3,6 +3,8 @@ import uuid
 import os
 import requests
 
+
+from pylognet.client import Client, LogLevel
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor
 
@@ -36,6 +38,19 @@ class App:
         self.__model_endpoint = self.__endpoints.get(
             "model", "http://192.168.11.100:8002"
         )
+        self.__logger_endpoint = self.__endpoints.get(
+            "logger", "http://logger.local:9000"
+        )
+
+        if self.__debug:
+
+            class DummyLogger:
+                def log(self, *_):
+                    pass
+
+            self.__logger = DummyLogger()
+        else:
+            self.__logger = Client("YummyControlServer", self.__logger_endpoint)
 
         self.__executor = ThreadPoolExecutor()
         self.__app = FastAPI()
@@ -101,11 +116,6 @@ class App:
             self.get_param,
             methods=["GET"],
         )
-        # self.__router.add_api_route(
-        #     "/list",
-        #     self.list_db,
-        #     methods=["GET"],
-        # )
         self.__router.add_api_route(
             "/get-users",
             self.get_users,
@@ -139,12 +149,18 @@ class App:
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     async def __call_llm(self, request: str) -> ResponseModel:
-        print("[INFO] Calling LLM...")
+        self.__logger.log(
+            "Calling LLM for request",
+            LogLevel.INFO,
+        )
         llm_response = await self.__llm.choose_dish(request)
         return llm_response
 
     def __generate_model(self, user_id: str, request: str) -> None:
-        print("[INFO] Calling model generator...")
+        self.__logger.log(
+            "Calling model generator",
+            LogLevel.INFO,
+        )
         data = {
             "user_id": user_id,
             "prompt": request,
@@ -157,7 +173,10 @@ class App:
             print(f"[ERROR] Model generation request exception for {user_id}: {e}")
 
     def __generate_audio(self, user_id: str, request: str) -> None:
-        print("[INFO] Calling audio generator...")
+        self.__logger.log(
+            "Calling audio generator",
+            LogLevel.INFO,
+        )
         data = {
             "user_id": user_id,
             "prompt": request,
@@ -165,9 +184,15 @@ class App:
 
         try:
             self.__post(f"{self.__audio_endpoint}/generate", json=data)
-            print(f"[INFO] Audio generation request succeeded for {user_id}")
+            self.__logger.log(
+                f"Audio generation request succeeded for {user_id}",
+                LogLevel.INFO,
+            )
         except requests.RequestException as e:
-            print(f"[ERROR] Audio generation request exception for {user_id}: {e}")
+            self.__logger.log(
+                f"Audio generation request exception for {user_id}: {e}",
+                LogLevel.ERROR,
+            )
 
     def get_app(self):
         self.__app.include_router(self.__router)
@@ -192,10 +217,10 @@ class App:
         user.meta.request = "Debug request"
         user.save_meta()
 
-        print("[INFO] New request registered")
-        print(f"  email : {user.meta.email}")
-        print(f"  uuid : {generated_uuid}")
-        print(f"  request : {user.meta.request}")
+        self.__logger.log(
+            f"Debug user created with UUID: {generated_uuid} and request: {user.meta.request}",
+            LogLevel.INFO,
+        )
 
         return JSONResponse(
             content={"user_id": f"UUID:{generated_uuid}"}, status_code=200
@@ -220,10 +245,10 @@ class App:
         user.meta.request = request.request
         user.save_meta()
 
-        print("[INFO] New request registered")
-        print(f"  email : {user.meta.email}")
-        print(f"  uuid : {generated_uuid}")
-        print(f"  request : {user.meta.request}")
+        self.__logger.log(
+            f"New request registered with UUID: {generated_uuid} and request: {user.meta.request}",
+            LogLevel.INFO,
+        )
 
         llm_response: ResponseModel
         if self.__debug:
@@ -391,21 +416,6 @@ class App:
             media_type="application/json",
             filename=os.path.basename(param_path),
         )
-
-    # /list
-    # async def list_db(self) -> JSONResponse:
-    #     users = self.__db.list_users()
-    #     result = [
-    #         {
-    #             "uuid": user.get_uuid(),
-    #             "status": self.__db.is_ready(user.get_uuid()),
-    #             "request": user.meta.request,
-    #             # For privacy, do not expose email
-    #             # "email": user.meta.email,
-    #         }
-    #         for user in users
-    #     ]
-    #     return JSONResponse(content={"users": result}, status_code=200)
 
     # /get-users
     async def get_users(self, n: int = 10) -> JSONResponse:

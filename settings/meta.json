@@ -5,7 +5,8 @@
     "endpoints": {
         "audio": "http://192.168.11.100:8001",
         "model": "http://192.168.11.145:8002",
-        "ollama": "http://192.168.11.144:11434"
+        "ollama": "http://localhost:11434",
+        "logger": "http://localhost:9000"
     },
     "ollama": {
         "model": "gemma3:12b",
