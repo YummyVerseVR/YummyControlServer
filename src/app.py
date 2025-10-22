@@ -419,7 +419,7 @@ class App:
 
     # /get-users
     async def get_users(self, n: int = 10) -> JSONResponse:
-        users = self.__db.list_users()[:n]
+        users = self.__db.list_users()[-n:][::-1]
         result = [
             {
                 "uuid": user.get_uuid(),
