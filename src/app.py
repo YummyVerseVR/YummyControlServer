@@ -250,7 +250,12 @@ class App:
 
     async def DAIBUTSU(self) -> JSONResponse:
         status = random.choice(OMIKUJI)
-        content = ({"message": DAIBUTSU, "status": status},)
+        content = {"message": DAIBUTSU, "status": status}
+
+        self.__logger.log(
+            "DAIBUTSU is spawned",
+            LogLevel.WARNING,
+        )
 
         if status == "Bug":
             return JSONResponse(
