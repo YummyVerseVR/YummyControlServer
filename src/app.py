@@ -2,7 +2,7 @@ import asyncio
 import uuid
 import os
 import requests
-
+import random
 
 from pylognet.client import LoggingClient, LogLevel
 from pydantic import BaseModel
@@ -16,6 +16,29 @@ from llm.controller import LLMController, ResponseModel
 
 from qr.email import EmailSender
 from qr.handler import QRHandler
+
+
+DAIBUTSU = r"""
+                   _oo0oo_
+                  o8888888o
+                  88" . "88
+                  (| -_- |)
+                  0\  =  /0
+                ___/`---'\___
+              .' \\|     |// '.
+             / \\|||  :  |||// \
+            / _||||| -:- |||||- \
+           |   | \\\  -  /// |   |
+           | \_|  ''\---/''  |_/ |
+           \  .-\__  '-'  ___/-. /
+         ___'. .'  /--.--\  `. .'___
+      ."" '<  `.___\_<|>_/___.' >' "".
+     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+     \  \ `_.   \_ __\ /__ _/   .-` /  /
+ =====`-.____`.___ \_____/___.-`___.-'=====
+                   `=---='
+"""
+OMIKUJI = ["大吉", "中吉", "吉", "小吉", "末吉", "凶", "大凶", "Bug"]
 
 
 class UserRequest(BaseModel):
@@ -56,6 +79,11 @@ class App:
         self.__setup_routes()
 
     def __setup_routes(self):
+        self.__router.add_api_route(
+            "/",
+            self.DAIBUTSU,
+            methods=["GET"],
+        )
         self.__router.add_api_route(
             "/request",
             self.request,
@@ -217,6 +245,21 @@ class App:
         self.__app.include_router(self.__router)
         return self.__app
 
+    async def DAIBUTSU(self) -> JSONResponse:
+        status = random.choice(OMIKUJI)
+        content = ({"message": DAIBUTSU, "status": status},)
+
+        if status == "Bug":
+            return JSONResponse(
+                content=content,
+                status_code=404,
+            )
+
+        return JSONResponse(
+            content=content,
+            status_code=200,
+        )
+
     # /create
     async def create(self) -> JSONResponse:
         generated_uuid = str(uuid.uuid4())
@@ -242,7 +285,7 @@ class App:
         )
 
         return JSONResponse(
-            content={"user_id": f"UUID:{generated_uuid}"}, status_code=200
+            content={"user_id": f"UUID:{generated_uuid}"}, status_code=201
         )
 
     # /request
@@ -271,7 +314,7 @@ class App:
         self.__executor.submit(self.__generate, user.meta.request, generated_uuid)
 
         return JSONResponse(
-            content={"detail": f"UUID:{generated_uuid}"}, status_code=200
+            content={"detail": f"UUID:{generated_uuid}"}, status_code=201
         )
 
     # /save/image
@@ -442,4 +485,4 @@ class App:
 
     # /ping
     async def ping(self) -> JSONResponse:
-        return JSONResponse(content={"message": "pong"}, status_code=201)
+        return JSONResponse(content={"message": "pong"}, status_code=200)
