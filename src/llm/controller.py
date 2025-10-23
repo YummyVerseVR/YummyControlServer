@@ -93,7 +93,7 @@ class LLMController:
                 error=f"Failed to parse JSON response: {str(e)}",
             )
 
-    async def choose_dish(self, user_request: str) -> ResponseModel:
+    def choose_dish(self, user_request: str) -> ResponseModel:
         """
         Calls the LLM to choose the best dish name based on user request and candidates.
 

@@ -134,7 +134,7 @@ class App:
         else:
             requests.post(*args, **kwargs)
 
-    async def __send_email(self, user_id: str) -> JSONResponse:
+    def __send_email(self, user_id: str) -> JSONResponse:
         if not self.__db.is_exist(user_id):
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
 
@@ -149,12 +149,12 @@ class App:
         asyncio.create_task(self.__email_sender.send_email(to, qr_code))
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
-    async def __call_llm(self, request: str) -> ResponseModel:
+    def __call_llm(self, request: str) -> ResponseModel:
         self.__logger.log(
             "Calling LLM for request",
             LogLevel.INFO,
         )
-        llm_response = await self.__llm.choose_dish(request)
+        llm_response = self.__llm.choose_dish(request)
         return llm_response
 
     def __generate_model(self, user_id: str, request: str) -> None:
@@ -200,6 +200,18 @@ class App:
                 f"Audio generation request exception for {user_id}: {e}",
                 LogLevel.ERROR,
             )
+
+    def __generate(self, request: str, uuid: str) -> None:
+        llm_response: ResponseModel
+        if self.__debug:
+            llm_response = ResponseModel()
+        else:
+            llm_response = self.__call_llm(request)
+
+        self.__db.load_param(uuid, llm_response.model_dump())
+
+        self.__executor.submit(self.__generate_model, uuid, request)
+        self.__executor.submit(self.__generate_audio, uuid, request)
 
     def get_app(self):
         self.__app.include_router(self.__router)
@@ -256,18 +268,7 @@ class App:
             f"New request registered with UUID: {generated_uuid} and request: {user.meta.request}",
             LogLevel.INFO,
         )
-
-        llm_response: ResponseModel
-        if self.__debug:
-            llm_response = ResponseModel()
-        else:
-            llm_response = await self.__call_llm(request.request)
-
-        self.__db.load_param(generated_uuid, llm_response.model_dump())
-
-        with self.__executor as pool:
-            pool.submit(self.__generate_model, generated_uuid, request.request)
-            pool.submit(self.__generate_audio, generated_uuid, request.request)
+        self.__executor.submit(self.__generate, user.meta.request, generated_uuid)
 
         return JSONResponse(
             content={"detail": f"UUID:{generated_uuid}"}, status_code=200
@@ -288,7 +289,7 @@ class App:
         self.__db.load_image(user_id, file)
 
         if self.__db.is_ready(user_id):
-            asyncio.create_task(self.__send_email(user_id))
+            self.__executor.submit(self.__send_email, user_id)
 
         return JSONResponse(
             {"message": f"Image file for user {uuid} saved successfully."}
@@ -309,7 +310,7 @@ class App:
         self.__db.load_model(user_id, file)
 
         if self.__db.is_ready(user_id):
-            asyncio.create_task(self.__send_email(user_id))
+            self.__executor.submit(self.__send_email, user_id)
 
         return JSONResponse(
             {"message": f"Model file for user {uuid} saved successfully."}
@@ -330,7 +331,7 @@ class App:
         self.__db.load_audio(user_id, file)
 
         if self.__db.is_ready(user_id):
-            asyncio.create_task(self.__send_email(user_id))
+            self.__executor.submit(self.__send_email, user_id)
 
         return JSONResponse(
             {"message": f"Audio file for user {uuid} saved successfully."}
@@ -441,4 +442,4 @@ class App:
 
     # /ping
     async def ping(self) -> JSONResponse:
-        return JSONResponse(content={"message": "pong"}, status_code=200)
+        return JSONResponse(content={"message": "pong"}, status_code=201)
