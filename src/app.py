@@ -2,7 +2,9 @@ import asyncio
 import uuid
 import os
 import requests
+import random
 
+from pylognet.client import LoggingClient, LogLevel
 from pydantic import BaseModel
 from concurrent.futures import ThreadPoolExecutor
 
@@ -16,25 +18,59 @@ from qr.email import EmailSender
 from qr.handler import QRHandler
 
 
+DAIBUTSU = r"""
+                   _oo0oo_
+                  o8888888o
+                  88" . "88
+                  (| -_- |)
+                  0\  =  /0
+                ___/`---'\___
+              .' \\|     |// '.
+             / \\|||  :  |||// \
+            / _||||| -:- |||||- \
+           |   | \\\  -  /// |   |
+           | \_|  ''\---/''  |_/ |
+           \  .-\__  '-'  ___/-. /
+         ___'. .'  /--.--\  `. .'___
+      ."" '<  `.___\_<|>_/___.' >' "".
+     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+     \  \ `_.   \_ __\ /__ _/   .-` /  /
+ =====`-.____`.___ \_____/___.-`___.-'=====
+                   `=---='
+"""
+OMIKUJI = ["大吉", "中吉", "吉", "小吉", "末吉", "凶", "大凶", "Bug"]
+
+
 class UserRequest(BaseModel):
     email: str
     request: str
 
 
 class App:
-    def __init__(self, config: dict, debug_mode: bool = False):
+    def __init__(self, config: dict, debug_mode: bool = False, logging: bool = False):
         self.__debug = debug_mode
-        self.__db = DataBase(config, debug_mode)
-        self.__llm = LLMController(config, debug_mode)
-        self.__qr_handler = QRHandler(config, debug_mode)
-        self.__email_sender = EmailSender(config.get("email", {}), debug_mode)
-
         self.__endpoints = config.get("endpoints", {})
         self.__audio_endpoint = self.__endpoints.get(
             "audio", "http://192.168.11.100:8001"
         )
         self.__model_endpoint = self.__endpoints.get(
             "model", "http://192.168.11.100:8002"
+        )
+        self.__logger_endpoint = self.__endpoints.get(
+            "logger", "http://logger.local:9000"
+        )
+
+        self.__logger = LoggingClient(
+            "YummyControlServer",
+            self.__logger_endpoint,
+            disable=not logging,
+        )
+
+        self.__db = DataBase(config, self.__logger, debug_mode)
+        self.__llm = LLMController(config, self.__logger, debug_mode)
+        self.__qr_handler = QRHandler(config, self.__logger, debug_mode)
+        self.__email_sender = EmailSender(
+            config.get("email", {}), self.__logger, debug_mode
         )
 
         self.__executor = ThreadPoolExecutor()
@@ -46,6 +82,11 @@ class App:
         self.__executor.shutdown(True)
 
     def __setup_routes(self):
+        self.__router.add_api_route(
+            "/",
+            self.DAIBUTSU,
+            methods=["GET"],
+        )
         self.__router.add_api_route(
             "/request",
             self.request,
@@ -105,8 +146,8 @@ class App:
             methods=["GET"],
         )
         self.__router.add_api_route(
-            "/list",
-            self.list_db,
+            "/get-users",
+            self.get_users,
             methods=["GET"],
         )
         self.__router.add_api_route(
@@ -117,11 +158,14 @@ class App:
 
     def __post(self, *args, **kwargs):
         if self.__debug:
-            print(f"[DEBUG] POST request to {args[0]} with {kwargs}")
+            self.__logger.log(
+                f"POST request to {args[0]} with {kwargs}",
+                LogLevel.DEBUG,
+            )
         else:
             requests.post(*args, **kwargs)
 
-    async def __send_email(self, user_id: str) -> JSONResponse:
+    def __send_email(self, user_id: str) -> JSONResponse:
         if not self.__db.is_exist(user_id):
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
 
@@ -136,13 +180,19 @@ class App:
         self.__executor.submit(self.__email_sender.send_email, to, qr_code)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
-    async def __call_llm(self, request: str) -> ResponseModel:
-        print("[INFO] Calling LLM...")
-        llm_response = await self.__llm.choose_dish(request)
+    def __call_llm(self, request: str) -> ResponseModel:
+        self.__logger.log(
+            "Calling LLM for request",
+            LogLevel.INFO,
+        )
+        llm_response = self.__llm.choose_dish(request)
         return llm_response
 
     def __generate_model(self, user_id: str, request: str) -> None:
-        print("[INFO] Calling model generator...")
+        self.__logger.log(
+            "Calling model generator",
+            LogLevel.INFO,
+        )
         data = {
             "user_id": user_id,
             "prompt": request,
@@ -150,12 +200,21 @@ class App:
 
         try:
             self.__post(f"{self.__model_endpoint}/generate", json=data)
-            print(f"[INFO] Model generation request succeeded for {user_id}")
+            self.__logger.log(
+                f"Model generation request succeeded for {user_id}",
+                LogLevel.INFO,
+            )
         except requests.RequestException as e:
-            print(f"[ERROR] Model generation request exception for {user_id}: {e}")
+            self.__logger.log(
+                f"Model generation request exception for {user_id}: {e}",
+                LogLevel.ERROR,
+            )
 
     def __generate_audio(self, user_id: str, request: str) -> None:
-        print("[INFO] Calling audio generator...")
+        self.__logger.log(
+            "Calling audio generator",
+            LogLevel.INFO,
+        )
         data = {
             "user_id": user_id,
             "prompt": request,
@@ -163,13 +222,46 @@ class App:
 
         try:
             self.__post(f"{self.__audio_endpoint}/generate", json=data)
-            print(f"[INFO] Audio generation request succeeded for {user_id}")
+            self.__logger.log(
+                f"Audio generation request succeeded for {user_id}",
+                LogLevel.INFO,
+            )
         except requests.RequestException as e:
-            print(f"[ERROR] Audio generation request exception for {user_id}: {e}")
+            self.__logger.log(
+                f"Audio generation request exception for {user_id}: {e}",
+                LogLevel.ERROR,
+            )
+
+    def __generate(self, request: str, uuid: str) -> None:
+        llm_response: ResponseModel
+        if self.__debug:
+            llm_response = ResponseModel()
+        else:
+            llm_response = self.__call_llm(request)
+
+        self.__db.load_param(uuid, llm_response.model_dump())
+
+        self.__executor.submit(self.__generate_model, uuid, request)
+        self.__executor.submit(self.__generate_audio, uuid, request)
 
     def get_app(self):
         self.__app.include_router(self.__router)
         return self.__app
+
+    async def DAIBUTSU(self) -> JSONResponse:
+        status = random.choice(OMIKUJI)
+        content = ({"message": DAIBUTSU, "status": status},)
+
+        if status == "Bug":
+            return JSONResponse(
+                content=content,
+                status_code=404,
+            )
+
+        return JSONResponse(
+            content=content,
+            status_code=200,
+        )
 
     # /create
     async def create(self) -> JSONResponse:
@@ -190,13 +282,13 @@ class App:
         user.meta.request = "Debug request"
         user.save_meta()
 
-        print("[INFO] New request registered")
-        print(f"  email : {user.meta.email}")
-        print(f"  uuid : {generated_uuid}")
-        print(f"  request : {user.meta.request}")
+        self.__logger.log(
+            f"Debug user created with UUID: {generated_uuid} and request: {user.meta.request}",
+            LogLevel.DEBUG,
+        )
 
         return JSONResponse(
-            content={"user_id": f"UUID:{generated_uuid}"}, status_code=200
+            content={"user_id": f"UUID:{generated_uuid}"}, status_code=201
         )
 
     # /request
@@ -218,24 +310,14 @@ class App:
         user.meta.request = request.request
         user.save_meta()
 
-        print("[INFO] New request registered")
-        print(f"  email : {user.meta.email}")
-        print(f"  uuid : {generated_uuid}")
-        print(f"  request : {user.meta.request}")
-
-        llm_response: ResponseModel
-        if self.__debug:
-            llm_response = ResponseModel()
-        else:
-            llm_response = await self.__call_llm(request.request)
-
-        self.__db.load_param(generated_uuid, llm_response.model_dump())
-
-        self.__executor.submit(self.__generate_model, generated_uuid, request.request)
-        self.__executor.submit(self.__generate_audio, generated_uuid, request.request)
+        self.__logger.log(
+            f"New request registered with UUID: {generated_uuid} and request: {user.meta.request}",
+            LogLevel.INFO,
+        )
+        self.__executor.submit(self.__generate, user.meta.request, generated_uuid)
 
         return JSONResponse(
-            content={"detail": f"UUID:{generated_uuid}"}, status_code=200
+            content={"detail": f"UUID:{generated_uuid}"}, status_code=201
         )
 
     # /save/image
@@ -253,7 +335,7 @@ class App:
         self.__db.load_image(user_id, file)
 
         if self.__db.is_ready(user_id):
-            asyncio.create_task(self.__send_email(user_id))
+            self.__executor.submit(self.__send_email, user_id)
 
         return JSONResponse(
             {"message": f"Image file for user {uuid} saved successfully."}
@@ -274,7 +356,7 @@ class App:
         self.__db.load_model(user_id, file)
 
         if self.__db.is_ready(user_id):
-            asyncio.create_task(self.__send_email(user_id))
+            self.__executor.submit(self.__send_email, user_id)
 
         return JSONResponse(
             {"message": f"Model file for user {uuid} saved successfully."}
@@ -295,7 +377,7 @@ class App:
         self.__db.load_audio(user_id, file)
 
         if self.__db.is_ready(user_id):
-            asyncio.create_task(self.__send_email(user_id))
+            self.__executor.submit(self.__send_email, user_id)
 
         return JSONResponse(
             {"message": f"Audio file for user {uuid} saved successfully."}
@@ -389,15 +471,16 @@ class App:
             filename=os.path.basename(param_path),
         )
 
-    # /list
-    async def list_db(self) -> JSONResponse:
-        users = self.__db.list_users()
+    # /get-users
+    async def get_users(self, n: int = 10) -> JSONResponse:
+        users = self.__db.list_users()[-n:][::-1]
         result = [
             {
                 "uuid": user.get_uuid(),
-                "email": user.meta.email,
+                "status": self.__db.is_ready(user.get_uuid()),
                 "request": user.meta.request,
-                "has_qr": user.meta.qr_code != "",
+                # For privacy, do not expose email
+                # "email": user.meta.email,
             }
             for user in users
         ]

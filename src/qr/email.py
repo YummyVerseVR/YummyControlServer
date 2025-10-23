@@ -12,12 +12,20 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from pylognet.client import LoggingClient, LogLevel
+
 
 class EmailSender:
     TEST_QR_CODE = "iVBORw0KGgoAAAANSUhEUgAAADYAAAA2AQMAAAC2i/ieAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAAeUlEQVQYlZXNMQoEMQiF4Qe2Aa8i2Aa8+oJtYK4SsB1wltlAnO3mb77KJ/AyyjDLIqQLFU2HxkP/sz2E5Lr/maFr//Ybr9e3dGp6FJlz8hZdO3JL07vxFqHaZhE05NhSzqNJESKsRZNIr2qz86F3FKEYUsz4eNu+7AJ7EFg5FDUcHwAAAABJRU5ErkJggg=="
 
-    def __init__(self, config: dict, debug_mode: bool = False):
+    def __init__(
+        self,
+        config: dict,
+        logger: LoggingClient,
+        debug_mode: bool = False,
+    ):
         self.__debug = debug_mode
+        self.__logger = logger
         self.__config = config.get("email", {})
         self.__service = self.__get_service()
 
@@ -47,9 +55,10 @@ class EmailSender:
         if self.__debug or self.__service is None:
             return
 
-        print("[INFO] Sending email...")
-        print(f"  To: {to}")
-        print(f"  QR Code (base64): {qr_code[:30]}...")
+        self.__logger.log(
+            f"Sending email to {to} with QR code (base64): {qr_code[:30]}...",
+            LogLevel.INFO,
+        )
 
         message = MIMEMultipart()
         message["to"] = to
@@ -68,10 +77,8 @@ class EmailSender:
         body = {"raw": encoded_message}
 
         try:
-            sent = (
-                self.__service.users().messages().send(userId="me", body=body).execute()
-            )
-            print(f"ID: {sent['id']}")
+            _ = self.__service.users().messages().send(userId="me", body=body).execute()
+            self.__logger.log(f"Email sent to {to} with QR code.", LogLevel.INFO)
         except Exception as e:
-            print(f"error: {e}")
+            self.__logger.log(f"Failed to send email to {to}: {e}", LogLevel.ERROR)
             raise HTTPException(status_code=500, detail=str(e))
