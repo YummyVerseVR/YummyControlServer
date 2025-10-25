@@ -1,4 +1,3 @@
-import asyncio
 import uuid
 import os
 import requests
@@ -18,26 +17,26 @@ from qr.email import EmailSender
 from qr.handler import QRHandler
 
 
-DAIBUTSU = r"""
-                   _oo0oo_
-                  o8888888o
-                  88" . "88
-                  (| -_- |)
-                  0\  =  /0
-                ___/`---'\___
-              .' \\|     |// '.
-             / \\|||  :  |||// \
-            / _||||| -:- |||||- \
-           |   | \\\  -  /// |   |
-           | \_|  ''\---/''  |_/ |
-           \  .-\__  '-'  ___/-. /
-         ___'. .'  /--.--\  `. .'___
-      ."" '<  `.___\_<|>_/___.' >' "".
-     | | :  `- \`.;`\ _ /`;.`/ - ` : | |
-     \  \ `_.   \_ __\ /__ _/   .-` /  /
- =====`-.____`.___ \_____/___.-`___.-'=====
-                   `=---='
-"""
+DAIBUTSU = [
+    r"                   _oo0oo_                  ",
+    r"                  o8888888o                 ",
+    r"                  88' . '88                 ",
+    r"                  (| -_- |)                 ",
+    r"                  0\  =  /0                 ",
+    r"                ___/`---'\___               ",
+    r"              .' \\|     |// '.             ",
+    r"             / \\|||  :  |||// \            ",
+    r"            / _||||| -:- |||||- \           ",
+    r"           |   | \\\  -  /// |   |          ",
+    r"           | \_|  ''\---/''  |_/ |          ",
+    r"           \  .-\__  '-'  ___/-. /          ",
+    r"         ___'. .'  /--.--\  `. .'___        ",
+    r"      .'' '<  `.___\_<|>_/___.' >' ''.      ",
+    r"     | | :  `- \`.;`\ _ /`;.`/ - ` : | |    ",
+    r"     \  \ `_.   \_ __\ /__ _/   .-` /  /    ",
+    r" =====`-.____`.___ \_____/___.-`___.-'===== ",
+    r"                   `=---='                  ",
+]
 OMIKUJI = ["大吉", "中吉", "吉", "小吉", "末吉", "凶", "大凶", "Bug"]
 
 
@@ -241,8 +240,8 @@ class App:
 
         self.__db.load_param(uuid, llm_response.model_dump())
 
-        self.__executor.submit(self.__generate_model, uuid, request)
-        self.__executor.submit(self.__generate_audio, uuid, request)
+        self.__executor.submit(self.__generate_model, uuid, llm_response.translated)
+        self.__executor.submit(self.__generate_audio, uuid, llm_response.translated)
 
     def get_app(self):
         self.__app.include_router(self.__router)

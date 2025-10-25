@@ -28,7 +28,7 @@
   "status": "ok" または "review",
   "chewiness": 1-10の整数,
   "firmness": 1-10の整数,
-  "translated": "queryの翻訳結果",
+  "translated": "queryの英訳結果",
   "best_name": "候補の名前" (statusが"ok"の場合),
   "top_names": ["候補1", "候補2", "候補3"] (statusが"review"の場合)
 }
