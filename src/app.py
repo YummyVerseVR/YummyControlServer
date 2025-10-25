@@ -80,8 +80,6 @@ class App:
         self.__app = FastAPI()
         self.__router = APIRouter()
 
-        asyncio.create_task(self.__worker())
-
         self.__setup_routes()
         self.__logger.log(
             "Control Server initialized successfully",
@@ -92,6 +90,8 @@ class App:
         self.__executor.shutdown(True)
 
     def __setup_routes(self):
+        self.__router.add_event_handler("startup", self.__activate)
+
         self.__router.add_api_route(
             "/",
             self.DAIBUTSU,
@@ -166,6 +166,9 @@ class App:
             methods=["GET"],
         )
 
+    def __activate(self) -> None:
+        asyncio.create_task(self.worker())
+
     def __post(self, *args, **kwargs):
         if self.__debug:
             self.__logger.log(
@@ -174,26 +177,6 @@ class App:
             )
         else:
             requests.post(*args, **kwargs)
-
-    async def __worker(self):
-        while True:
-            current_time = time.time()
-            resend_list = []
-            for user_id, (request, timestamp) in self.__queue.items():
-                if current_time - timestamp > 300:
-                    self.__logger.log(
-                        f"Request for UUID {user_id} timed out.",
-                        LogLevel.WARNING,
-                    )
-                    resend_list.append((user_id, request))
-
-            for user_id, request in resend_list:
-                self.__logger.log(
-                    f"Resubmitting generation for UUID {user_id}.",
-                    LogLevel.INFO,
-                )
-                self.__queue[user_id] = (request, time.time())
-                self.__executor.submit(self.__generate, request.request, user_id)
 
     def __send_email(self, user_id: str) -> JSONResponse:
         if not self.__db.is_exist(user_id):
@@ -279,6 +262,28 @@ class App:
     def get_app(self):
         self.__app.include_router(self.__router)
         return self.__app
+
+    async def worker(self):
+        while True:
+            current_time = time.time()
+            resend_list = []
+            for user_id, (request, timestamp) in self.__queue.items():
+                if current_time - timestamp > 300:
+                    self.__logger.log(
+                        f"Request for UUID {user_id} timed out.",
+                        LogLevel.WARNING,
+                    )
+                    resend_list.append((user_id, request))
+
+            for user_id, request in resend_list:
+                self.__logger.log(
+                    f"Resubmitting generation for UUID {user_id}.",
+                    LogLevel.INFO,
+                )
+                self.__queue[user_id] = (request, time.time())
+                self.__executor.submit(self.__generate, request.request, user_id)
+
+            await asyncio.sleep(10)
 
     async def DAIBUTSU(self) -> JSONResponse:
         status = random.choice(OMIKUJI)
