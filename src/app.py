@@ -1,5 +1,7 @@
+import asyncio
 import uuid
 import os
+import time
 import requests
 import random
 
@@ -65,6 +67,8 @@ class App:
             disable=not logging,
         )
 
+        self.__queue: dict[str, tuple[UserRequest, float]] = {}
+
         self.__db = DataBase(config, self.__logger, debug_mode)
         self.__llm = LLMController(config, self.__logger, debug_mode)
         self.__qr_handler = QRHandler(config, self.__logger, debug_mode)
@@ -75,7 +79,14 @@ class App:
         self.__executor = ThreadPoolExecutor()
         self.__app = FastAPI()
         self.__router = APIRouter()
+
+        asyncio.create_task(self.__worker())
+
         self.__setup_routes()
+        self.__logger.log(
+            "Control Server initialized successfully",
+            LogLevel.INFO,
+        )
 
     def __del__(self):
         self.__executor.shutdown(True)
@@ -164,6 +175,26 @@ class App:
         else:
             requests.post(*args, **kwargs)
 
+    async def __worker(self):
+        while True:
+            current_time = time.time()
+            resend_list = []
+            for user_id, (request, timestamp) in self.__queue.items():
+                if current_time - timestamp > 300:
+                    self.__logger.log(
+                        f"Request for UUID {user_id} timed out.",
+                        LogLevel.WARNING,
+                    )
+                    resend_list.append((user_id, request))
+
+            for user_id, request in resend_list:
+                self.__logger.log(
+                    f"Resubmitting generation for UUID {user_id}.",
+                    LogLevel.INFO,
+                )
+                self.__queue[user_id] = (request, time.time())
+                self.__executor.submit(self.__generate, request.request, user_id)
+
     def __send_email(self, user_id: str) -> JSONResponse:
         if not self.__db.is_exist(user_id):
             return JSONResponse(content={"detail": "UUID not found"}, status_code=404)
@@ -177,6 +208,8 @@ class App:
         to = user.meta.email
         qr_code = user.meta.qr_code
         self.__executor.submit(self.__email_sender.send_email, to, qr_code)
+
+        self.__queue.pop(user_id)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     def __call_llm(self, request: str) -> ResponseModel:
@@ -200,12 +233,12 @@ class App:
         try:
             self.__post(f"{self.__model_endpoint}/generate", json=data)
             self.__logger.log(
-                f"Model generation request succeeded for {user_id}",
+                f"Model generation request submitted for request: {request}, user_id: {user_id}",
                 LogLevel.INFO,
             )
         except requests.RequestException as e:
             self.__logger.log(
-                f"Model generation request exception for {user_id}: {e}",
+                f"Model generation request exception for request: {request}, user_id: {user_id}: {e}",
                 LogLevel.ERROR,
             )
 
@@ -222,12 +255,12 @@ class App:
         try:
             self.__post(f"{self.__audio_endpoint}/generate", json=data)
             self.__logger.log(
-                f"Audio generation request succeeded for {user_id}",
+                f"Audio generation request submitted for request: {request}, user_id: {user_id}",
                 LogLevel.INFO,
             )
         except requests.RequestException as e:
             self.__logger.log(
-                f"Audio generation request exception for {user_id}: {e}",
+                f"Audio generation request exception for request: {request}, user_id: {user_id}: {e}",
                 LogLevel.ERROR,
             )
 
@@ -297,7 +330,13 @@ class App:
 
     # /request
     async def request(self, request: UserRequest) -> JSONResponse:
+        self.__logger.log(
+            f"Starting generation process for request: {request}, UUID: {uuid}",
+            LogLevel.INFO,
+        )
+
         generated_uuid = str(uuid.uuid4())
+        self.__queue[generated_uuid] = (request, time.time())
         qr_data, qr_image = self.__qr_handler.generate_qr(generated_uuid)
 
         self.__db.add_user(generated_uuid)
@@ -398,6 +437,11 @@ class App:
 
     # /{user_id}/qr
     async def get_qr(self, user_id: str) -> FileResponse:
+        self.__logger.log(
+            f"Fetching QR for user_id: {user_id}",
+            LogLevel.INFO,
+        )
+
         qr_path = ""
         if (userdata := self.__db.get_user(user_id)) is not None:
             qr_path = userdata.get_qr_path()
@@ -413,6 +457,11 @@ class App:
 
     # /{user_id}/image
     async def get_image(self, user_id: str) -> FileResponse:
+        self.__logger.log(
+            f"Fetching image for user_id: {user_id}",
+            LogLevel.INFO,
+        )
+
         image_path = ""
         if (userdata := self.__db.get_user(user_id)) is not None:
             image_path = userdata.get_image_path()
@@ -428,6 +477,11 @@ class App:
 
     # /{user_id}/model
     async def get_model(self, user_id: str) -> FileResponse:
+        self.__logger.log(
+            f"Fetching model for user_id: {user_id}",
+            LogLevel.INFO,
+        )
+
         model_path = ""
         if (userdata := self.__db.get_user(user_id)) is not None:
             model_path = userdata.get_model_path()
@@ -445,6 +499,11 @@ class App:
 
     # /{user_id}/audio
     async def get_audio(self, user_id: str) -> FileResponse:
+        self.__logger.log(
+            f"Fetching audio for user_id: {user_id}",
+            LogLevel.INFO,
+        )
+
         audio_path = ""
         if (userdata := self.__db.get_user(user_id)) is not None:
             audio_path = userdata.get_audio_path()
@@ -460,6 +519,11 @@ class App:
 
     # /{user_id}/param
     async def get_param(self, user_id: str) -> FileResponse:
+        self.__logger.log(
+            f"Fetching param for user_id: {user_id}",
+            LogLevel.INFO,
+        )
+
         param_path = ""
         if (userdata := self.__db.get_user(user_id)) is not None:
             param_path = userdata.get_param_path()
@@ -477,6 +541,11 @@ class App:
 
     # /get-users
     async def get_users(self, n: int = 10) -> JSONResponse:
+        self.__logger.log(
+            f"Fetching last {n} users",
+            LogLevel.INFO,
+        )
+
         users = self.__db.list_users()[-n:][::-1]
         result = [
             {
