@@ -3,9 +3,9 @@
         "path": "~/HDD"
     },
     "endpoints": {
-        "audio": "http://192.168.11.100:8001",
-        "model": "http://192.168.11.145:8002",
-        "ollama": "http://192.168.11.147:11434",
+        "audio": "http://192.168.11.100:8000",
+        "model": "http://192.168.11.145:8000",
+        "ollama": "http://localhost:11434",
         "logger": "http://localhost:9000"
     },
     "ollama": {
