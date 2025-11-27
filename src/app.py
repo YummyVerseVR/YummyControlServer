@@ -176,7 +176,7 @@ class App:
 
         to = user.meta.email
         qr_code = user.meta.qr_code
-        self.__executor.submit(self.__email_sender.send_email, to, qr_code)
+        self.__executor.submit(self.__email_sender.send_email, to, qr_code, user_id)
         return JSONResponse(content={"detail": "QR Code sent successfully"})
 
     def __call_llm(self, request: str) -> ResponseModel:

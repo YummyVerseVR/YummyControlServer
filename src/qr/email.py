@@ -51,7 +51,7 @@ class EmailSender:
                 token.write(creds.to_json())
         return build("gmail", "v1", credentials=creds)
 
-    def send_email(self, to: str, qr_code: str):
+    def send_email(self, to: str, qr_code: str, uuid: str):
         if self.__debug or self.__service is None:
             return
 
@@ -65,7 +65,9 @@ class EmailSender:
         message["from"] = "me"
         message["subject"] = "YummyVerseのQRコード"
 
-        body_text = "YummyVerseのQRコードをお送りします。アプリで読み取ってください。"
+        preview_base = self.__config.get("preview-link", "https://yummy-previewer.theunusuaru3.workers.dev/")
+        preview_url = f"{preview_base}{uuid}"
+        body_text = f"YummyVerseのQRコードをお送りします。アプリで読み取ってください。\n\nプレビューはこちら: {preview_url}"
         message.attach(MIMEText(body_text, "plain", "utf-8"))
 
         qr_data = base64.b64decode(qr_code)

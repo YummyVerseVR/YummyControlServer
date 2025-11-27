@@ -32,6 +32,7 @@
         "scopes": ["https://www.googleapis.com/auth/gmail.send"],
         "from": "yummyversevr@gmail.com",
         "credential": "settings/credential.json",
-        "token": "settings/token.json"
+        "token": "settings/token.json",
+        "preview-link": "https://yummy-previewer.theunusuaru3.workers.dev/"
     }
 }
