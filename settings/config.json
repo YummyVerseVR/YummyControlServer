@@ -1,11 +1,11 @@
 {
     "db": {
-        "path": "~/HDD"
+        "path": "./db"
     },
     "endpoints": {
-        "audio": "http://192.168.11.100:8001",
-        "model": "http://192.168.11.145:8002",
-        "ollama": "http://192.168.11.144:11434",
+        "audio": "http://10.0.2.14:8001",
+        "model": "http://10.0.3.11:8002",
+        "ollama": "http://localhost:11434",
         "logger": "http://localhost:9000"
     },
     "ollama": {
