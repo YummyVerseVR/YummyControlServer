@@ -36,7 +36,7 @@
         "preview-link": "https://yummy-previewer.theunusuaru3.workers.dev/"
     },
     "system": {
-        "enable_logging": true,
+        "enable_logging": false,
         "debug_mode": false,
         "port": 8000
     }
