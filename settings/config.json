@@ -34,5 +34,10 @@
         "credential": "settings/credential.json",
         "token": "settings/token.json",
         "preview-link": "https://yummy-previewer.theunusuaru3.workers.dev/"
+    },
+    "system": {
+        "enable_logging": true,
+        "debug_mode": false,
+        "port": 8000
     }
 }
